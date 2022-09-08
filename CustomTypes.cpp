@@ -75,7 +75,8 @@ void defineAll(Ref<BinaryView> bv)
     type = finalizeStructureBuilder(bv, methodBuilder, CustomTypes::Method);
 
     StructureBuilder methListBuilder;
-    methListBuilder.AddMember(Type::IntegerType(4, false), "obsolete");
+    methListBuilder.AddMember(Type::IntegerType(2, false), "entsize");
+    methListBuilder.AddMember(Type::IntegerType(2, false), "flags");
     methListBuilder.AddMember(Type::IntegerType(4, false), "count");
     type = finalizeStructureBuilder(bv, methListBuilder, CustomTypes::MethodList);
 

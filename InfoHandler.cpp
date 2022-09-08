@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cstddef>
 #include <regex>
 
 using namespace BinaryNinja;
@@ -48,7 +49,7 @@ TypeRef InfoHandler::namedType(BinaryViewRef bv, const std::string& name)
     return Type::NamedType(bv, name);
 }
 
-TypeRef InfoHandler::stringType(size_t size)
+TypeRef InfoHandler::stringType(std::size_t size)
 {
     return Type::ArrayType(Type::IntegerType(1, true), size + 1);
 }
@@ -69,7 +70,7 @@ void InfoHandler::defineReference(BinaryViewRef bv, ObjectiveNinja::Address from
     bv->AddUserDataReference(from, to);
 }
 
-void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassInfo& ci,
+void InfoHandler::applyMethodType(BinaryViewRef bv, const std::string& base_name,
     const ObjectiveNinja::MethodInfo& mi)
 {
     auto selectorTokens = mi.selectorTokens();
@@ -84,7 +85,7 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassI
     }
 
     // Shorthand for formatting an individual "part" of the type signature.
-    auto partForIndex = [selectorTokens, typeTokens](size_t i) {
+    auto partForIndex = [selectorTokens, typeTokens](std::size_t i) {
         std::string argName;
 
         // Indices 0, 1, and 2 are the function return type, self parameter, and
@@ -104,7 +105,7 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassI
 
     // Build the type string for the method.
     std::string typeString;
-    for (size_t i = 0; i < typeTokens.size(); ++i) {
+    for (std::size_t i = 0; i < typeTokens.size(); ++i) {
         std::string suffix;
         auto part = partForIndex(i);
 
@@ -137,8 +138,61 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassI
 
     // TODO: Use '+' or '-' conditionally once class methods are supported. For
     // right now, only instance methods are analyzed and we can just use '-'.
-    auto name = "-[" + ci.name.referenced + " " + mi.selectorName.referenced + "]";
+    auto name = "-[" + base_name + " " + mi.selectorName.referenced + "]";
     defineSymbol(bv, mi.impl.address, name, "", FunctionSymbol);
+}
+
+void InfoHandler::applyMethodListType(
+    SharedAnalysisInfo info, BinaryViewRef bv,
+    const TypeRef &taggedPointerType, const TypeRef &methodListType,
+    std::size_t &totalMethods, const std::string& base_name,
+    const ObjectiveNinja::MethodListInfo& mli, const std::string& prefix)
+{
+    if (mli.address && !mli.methods.empty()) {
+        auto methodType = mli.hasRelativeOffsets()
+            ? bv->GetTypeByName(CustomTypes::MethodListEntry)
+            : bv->GetTypeByName(CustomTypes::Method);
+
+        // Create a data variable and symbol for the method list header.
+        defineVariable(bv, mli.address, methodListType);
+        defineSymbol(bv, mli.address, base_name, prefix);
+
+        // Create data variables for each method in the method list.
+        for (const auto& mi : mli.methods) {
+            ++totalMethods;
+            defineReference(bv, mli.address, mi.address);
+
+            defineVariable(bv, mi.address, methodType);
+            defineSymbol(bv, mi.address, sanitizeSelector(mi.selectorName.referenced), "mt_");
+
+            if (!info->selectorRefsByKey.count(mi.selectorName.address)) {
+                defineVariable(bv, mi.selectorName.address, stringType(mi.selectorName.referenced.size()));
+                defineSymbol(bv, mi.selectorName.address, sanitizeSelector(mi.selectorName.referenced), "sn_");
+            }
+            defineReference(bv, mi.address, mi.selectorName.address);
+
+            defineVariable(bv, mi.type.address, stringType(mi.type.referenced.size()));
+            defineSymbol(bv, mi.type.address, sanitizeSelector(mi.selectorName.referenced), "mu_");
+            defineReference(bv, mi.address, mi.type.address);
+
+            defineReference(bv, mi.address, mi.impl.address);
+
+            if (mi.extendedType.list.address) {
+                defineVariable(bv, mi.extendedType.list.address, taggedPointerType);
+                defineSymbol(bv, mi.extendedType.list.address, sanitizeSelector(mi.selectorName.referenced), "emup_");
+                if (mi.extendedType.entry.address) {
+                    defineReference(bv, mi.extendedType.list.address, mi.extendedType.entry.address);
+                    if (mi.extendedType.entry.address != mi.type.address) {
+                        defineVariable(bv, mi.extendedType.entry.address, stringType(mi.extendedType.entry.referenced.size()));
+                        defineSymbol(bv, mi.extendedType.entry.address, sanitizeSelector(mi.selectorName.referenced), "emu_");
+                        defineReference(bv, mi.address, mi.extendedType.entry.address);
+                    }
+                }
+            }
+
+            applyMethodType(bv, base_name, mi);
+        }
+    }
 }
 
 void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
@@ -175,60 +229,47 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
 
         defineVariable(bv, sr->address, taggedPointerType);
         defineVariable(bv, sr->referenced.resolved.address, stringType(sr->referenced.resolved.referenced.size()));
-        defineSymbol(bv, sr->address, sanitizedSelector, "sr_");
-        defineSymbol(bv, sr->referenced.resolved.address, sanitizedSelector, "sl_");
+        defineSymbol(bv, sr->address, sanitizedSelector, "stp_");
+        defineSymbol(bv, sr->referenced.resolved.address, sanitizedSelector, "sn_");
 
         defineReference(bv, sr->address, sr->referenced.resolved.address);
     }
 
-    unsigned totalMethods = 0;
+    auto totalMethods = std::size_t {0};
 
     std::map<ObjectiveNinja::Address, std::string> addressToClassMap;
 
     // Create data variables and symbols for the analyzed classes.
     for (const auto& cir : info->classes) {
         const auto& ci = cir.referenced;
-        defineVariable(bv, cir.address, taggedPointerType);
+        if (cir.address) {
+            defineVariable(bv, cir.address, taggedPointerType);
+            defineSymbol(bv, cir.address, ci.name.referenced, "ctp_");
+            defineReference(bv, cir.address, ci.address);
+        }
         defineVariable(bv, ci.address, classType);
+        defineSymbol(bv, ci.address, ci.name.referenced, "ct_");
         defineVariable(bv, ci.data.address, classDataType);
         defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
         defineSymbol(bv, cir.address, ci.name.referenced, "cp_");
         defineSymbol(bv, ci.address, ci.name.referenced, "cl_");
         addressToClassMap[ci.address] = ci.name.referenced;
-        defineSymbol(bv, ci.data.address, ci.name.referenced, "ro_");
+        defineSymbol(bv, ci.data.address, ci.name.referenced, "cd_");
         defineSymbol(bv, ci.name.address, ci.name.referenced, "nm_");
 
         defineReference(bv, cir.address, ci.address);
         defineReference(bv, ci.address, ci.data.address);
-        defineReference(bv, ci.data.address, ci.name.address);
-        defineReference(bv, ci.data.address, ci.methodList.address);
-
-        if (ci.methodList.address == 0 || ci.methodList.referenced.methods.empty())
-            continue;
-
-        auto methodType = ci.methodList.referenced.hasRelativeOffsets()
-            ? bv->GetTypeByName(CustomTypes::MethodListEntry)
-            : bv->GetTypeByName(CustomTypes::Method);
-
-        // Create data variables for each method in the method list.
-        for (const auto& mi : ci.methodList.referenced.methods) {
-            ++totalMethods;
-
-            defineVariable(bv, mi.address, methodType);
-            defineSymbol(bv, mi.address, sanitizeSelector(mi.selectorName.referenced), "mt_");
-            defineVariable(bv, mi.type.address, stringType(mi.type.referenced.size()));
-
-            defineReference(bv, ci.methodList.address, mi.address);
-            defineReference(bv, mi.address, mi.selectorName.address);
-            defineReference(bv, mi.address, mi.type.address);
-            defineReference(bv, mi.address, mi.impl.address);
-
-            applyMethodType(bv, ci, mi);
+        if (ci.name.address) {
+            defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
+            defineSymbol(bv, ci.name.address, ci.name.referenced, "cn_");
+            defineReference(bv, ci.data.address, ci.name.address);
+        }
+        if (ci.methodList.address) {
+            defineReference(bv, ci.data.address, ci.methodList.address);
         }
 
-        // Create a data variable and symbol for the method list header.
-        defineVariable(bv, ci.methodList.address, methodListType);
-        defineSymbol(bv, ci.methodList.address, ci.name.referenced, "ml_");
+        applyMethodListType(info, bv, taggedPointerType, methodListType,
+            totalMethods, ci.name.referenced, ci.methodList.referenced, "ml_");
     }
 
     for (const auto classRef : info->classRefs) {
@@ -244,12 +285,11 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     for (const auto superClassRef : info->superClassRefs) {
         bv->DefineDataVariable(superClassRef.address, taggedPointerType);
 
-        if (superClassRef.referenced.address == 0)
-            continue;
-
-        auto localClass = addressToClassMap.find(superClassRef.referenced.address);
-        if (localClass != addressToClassMap.end())
-            defineSymbol(bv, superClassRef.address, localClass->second, "su_");
+        if (superClassRef.referenced.address != 0) {
+            auto localClass = addressToClassMap.find(superClassRef.referenced.address);
+            if (localClass != addressToClassMap.end())
+                defineSymbol(bv, superClassRef.address, localClass->second, "scr_");
+        }
     }
 
     bv->CommitUndoActions();

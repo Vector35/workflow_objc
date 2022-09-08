@@ -15,6 +15,11 @@ namespace ObjectiveNinja {
  * Basic analyzer for identifying and recording CFString instances.
  */
 class CFStringAnalyzer : public Analyzer {
+    /**
+     * Analyze a CFString.
+     */
+    CFStringInfo analyzeCFString(Address);
+
 public:
     CFStringAnalyzer(SharedAnalysisInfo, SharedAbstractFile);
 

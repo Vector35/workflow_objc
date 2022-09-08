@@ -15,6 +15,11 @@ namespace ObjectiveNinja {
  * Analyzer for parsing Objective-C selectors and selector references.
  */
 class SelectorAnalyzer : public Analyzer {
+    /**
+     * Analyze a selector name.
+     */
+    SelectorNameInfo analyzeSelectorName(Address);
+
 public:
     SelectorAnalyzer(SharedAnalysisInfo, SharedAbstractFile);
 

@@ -6,6 +6,7 @@
  */
 
 #include "AnalysisInfo.h"
+
 #include "TypeParser.h"
 
 #include <sstream>

@@ -5,9 +5,13 @@
 namespace ObjectiveNinja {
 
 /**
- * Analyzer for extracting Objective-C class information.
+ * Analyzer for extracting Objective-C class reference information.
  */
 class ClassRefAnalyzer : public Analyzer {
+    /**
+     * Analyze a class reference.
+     */
+     AddressRefInfo analyzeClassRef(Address);
 
 public:
     ClassRefAnalyzer(SharedAnalysisInfo, SharedAbstractFile);

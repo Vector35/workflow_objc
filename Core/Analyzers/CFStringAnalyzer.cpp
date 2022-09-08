@@ -15,6 +15,15 @@ CFStringAnalyzer::CFStringAnalyzer(SharedAnalysisInfo info,
 {
 }
 
+CFStringInfo CFStringAnalyzer::analyzeCFString(Address address)
+{
+    return CFStringInfo {
+        /* .address = */ AddressInfo(address),
+        /* .data = */ AddressInfo(arp(m_file->readLong(address + 0x10))),
+        /* .size = */ m_file->readLong(address + 0x18)
+    };
+}
+
 void CFStringAnalyzer::run()
 {
     const auto sectionStart = m_file->sectionStart("__cfstring");
@@ -23,11 +32,6 @@ void CFStringAnalyzer::run()
         return;
 
     for (auto address = sectionStart; address < sectionEnd; address += 0x20) {
-        auto cfString = CFStringInfo {};
-        cfString.address = address;
-        cfString.data.address = arp(m_file->readLong(address + 0x10));
-        cfString.size = m_file->readLong(address + 0x18);
-
-        m_info->cfStrings.emplace_back(cfString);
+        m_info->cfStrings.emplace_back(analyzeCFString(address));
     }
 }

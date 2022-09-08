@@ -11,6 +11,10 @@
 
 #include "BinaryNinja.h"
 
+#include <cstddef>
+#include <memory>
+#include <string>
+
 using SharedAnalysisInfo = std::shared_ptr<ObjectiveNinja::AnalysisInfo>;
 
 /**
@@ -41,7 +45,7 @@ class InfoHandler {
     /**
      * Create a type for a string (character array) of the given size.
      */
-    static inline TypeRef stringType(size_t);
+    static inline TypeRef stringType(std::size_t);
 
     /**
      * Shorthand function for defining a user data variable.
@@ -63,8 +67,16 @@ class InfoHandler {
     /**
      * Create a symbol and apply return/argument types for a method.
      */
-    static void applyMethodType(BinaryViewRef, const ObjectiveNinja::ClassInfo&,
+    static void applyMethodType(BinaryViewRef, const std::string& base_name,
         const ObjectiveNinja::MethodInfo&);
+
+    /**
+     * Create variables & symbols and apply return/argument types for each method in a method list.
+     */
+    static void applyMethodListType(SharedAnalysisInfo, BinaryViewRef,
+        const TypeRef&, const TypeRef&,
+        std::size_t&, const std::string& base_name,
+        const ObjectiveNinja::MethodListInfo&, const std::string&);
 
 public:
     /**

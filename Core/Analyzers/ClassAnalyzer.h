@@ -16,6 +16,16 @@ namespace ObjectiveNinja {
  */
 class ClassAnalyzer : public Analyzer {
     /**
+     * Analyze a class.
+     */
+    ClassInfo analyzeClass(Address);
+
+    /**
+     * Analyze a method.
+     */
+    MethodInfo analyzeMethod(Address, bool hasRelativeOffsets, bool hasDirectSelectors);
+
+    /**
      * Analyze a method list.
      */
     MethodListInfo analyzeMethodList(Address);

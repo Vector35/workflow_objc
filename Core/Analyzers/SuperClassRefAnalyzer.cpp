@@ -7,6 +7,11 @@ SuperClassRefAnalyzer::SuperClassRefAnalyzer(SharedAnalysisInfo info, SharedAbst
 {
 }
 
+AddressRefInfo SuperClassRefAnalyzer::analyzeSuperClassRef(Address address)
+{
+    return {address, m_file->readLong(address)};
+}
+
 void SuperClassRefAnalyzer::run()
 {
     const auto sectionStart = m_file->sectionStart("__objc_superrefs");
@@ -16,6 +21,6 @@ void SuperClassRefAnalyzer::run()
 
     // TODO: Dynamic Address size for armv7
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
-        m_info->superClassRefs.push_back({ address, m_file->readLong(address) });
+        m_info->superClassRefs.emplace_back(analyzeSuperClassRef(address));
     }
 }

@@ -7,6 +7,11 @@ ClassRefAnalyzer::ClassRefAnalyzer(SharedAnalysisInfo info, SharedAbstractFile f
 {
 }
 
+AddressRefInfo ClassRefAnalyzer::analyzeClassRef(Address address)
+{
+    return {address, m_file->readLong(address)};
+}
+
 void ClassRefAnalyzer::run()
 {
     const auto sectionStart = m_file->sectionStart("__objc_classrefs");
@@ -16,6 +21,6 @@ void ClassRefAnalyzer::run()
 
     // TODO: Dynamic Address size for armv7
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
-        m_info->classRefs.push_back({ address, m_file->readLong(address) });
+        m_info->classRefs.emplace_back(analyzeClassRef(address));
     }
 }

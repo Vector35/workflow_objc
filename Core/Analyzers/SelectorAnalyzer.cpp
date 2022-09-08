@@ -15,6 +15,11 @@ SelectorAnalyzer::SelectorAnalyzer(SharedAnalysisInfo info,
 {
 }
 
+SelectorNameInfo SelectorAnalyzer::analyzeSelectorName(Address address)
+{
+    return {address, m_file->readStringAt(address)};
+}
+
 void SelectorAnalyzer::run()
 {
     const auto sectionStart = m_file->sectionStart("__objc_selrefs");
@@ -23,15 +28,12 @@ void SelectorAnalyzer::run()
         return;
 
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
-        auto ssri = std::make_shared<SelectorRefInfo>();
-        ssri->address = address;
-        ssri->referenced.unresolvedAddress = m_file->readLong(address);
-        ssri->referenced.resolved.address = arp(ssri->referenced.unresolvedAddress);
-        ssri->referenced.resolved.referenced = m_file->readStringAt(ssri->referenced.resolved.address);
+        auto unresolvedSelectorNameAddress = m_file->readLong(address);
+        auto sri = std::make_shared<SelectorRefInfo>(address, unresolvedSelectorNameAddress, SelectorAnalyzer::analyzeSelectorName(arp(unresolvedSelectorNameAddress)));
 
-        m_info->selectorRefs.emplace_back(ssri);
+        m_info->selectorRefs.emplace_back(sri);
 
-        m_info->selectorRefsByKey[ssri->referenced.unresolvedAddress] = ssri;
-        m_info->selectorRefsByKey[ssri->address] = ssri;
+        m_info->selectorRefsByKey[sri->referenced.unresolvedAddress] = sri;
+        m_info->selectorRefsByKey[sri->address] = sri;
     }
 }
