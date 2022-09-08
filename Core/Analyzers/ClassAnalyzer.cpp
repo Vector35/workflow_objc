@@ -36,6 +36,10 @@ ClassInfo ClassAnalyzer::analyzeClass(Address address)
     if (ci.methodList.address)
         ci.methodList.referenced = analyzeMethodList(ci.methodList.address);
 
+    ci.protocolList.address = arp(m_file->readLong(ci.data.address + 0x28));
+    // if (ci.protocolList.address)
+    //     ci.protocolList.referenced = analyzeProtocolList(ci.protocolList.address);
+
     ci.propertyList.address = arp(m_file->readLong(ci.data.address + 0x40));
     // if (ci.propertyList.address)
     //     ci.propertyList.referenced = analyzePropertyList(ci.propertyList.address);

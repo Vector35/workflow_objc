@@ -119,6 +119,26 @@ void defineAll(Ref<BinaryView> bv)
     classBuilder.AddMember(fastPointerType, "data");
     type = finalizeStructureBuilder(bv, classBuilder, CustomTypes::Class);
 
+    StructureBuilder protocolBuilder;
+    protocolBuilder.AddMember(taggedPointerType, "isa");
+    protocolBuilder.AddMember(taggedPointerType, "name");
+    protocolBuilder.AddMember(taggedPointerType, "protocols");
+    protocolBuilder.AddMember(taggedPointerType, "instance_methods");
+    protocolBuilder.AddMember(taggedPointerType, "class_methods");
+    protocolBuilder.AddMember(taggedPointerType, "optional_instance_methods");
+    protocolBuilder.AddMember(taggedPointerType, "optional_class_methods");
+    protocolBuilder.AddMember(taggedPointerType, "protocols");
+    protocolBuilder.AddMember(Type::IntegerType(4, false), "size");
+    protocolBuilder.AddMember(Type::IntegerType(4, false), "flags");
+    protocolBuilder.AddMember(taggedPointerType, "extended_method_types");
+    protocolBuilder.AddMember(taggedPointerType, "demangled_name");
+    protocolBuilder.AddMember(taggedPointerType, "class_properties");
+    type = finalizeStructureBuilder(bv, protocolBuilder, CustomTypes::Protocol);
+
+    StructureBuilder protocolListBuilder;
+    protocolListBuilder.AddMember(Type::IntegerType(4, false), "count");
+    type = finalizeStructureBuilder(bv, protocolListBuilder, CustomTypes::ProtocolList);
+
     StructureBuilder instanceVariableBuilder;
     instanceVariableBuilder.AddMember(Type::PointerType(addrSize, Type::IntegerType(4, false)), "offset");
     instanceVariableBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");

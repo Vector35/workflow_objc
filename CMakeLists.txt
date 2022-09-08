@@ -15,6 +15,7 @@ set(CORE_SOURCE
   Core/Analyzers/CFStringAnalyzer.h
   Core/Analyzers/ClassAnalyzer.h
   Core/Analyzers/ClassRefAnalyzer.h
+  Core/Analyzers/ProtocolAnalyzer.h
   Core/Analyzers/SelectorAnalyzer.h
   Core/Analyzers/SuperClassRefAnalyzer.h
   Core/BinaryViewFile.h
@@ -27,6 +28,7 @@ set(CORE_SOURCE
   Core/Analyzers/CFStringAnalyzer.cpp
   Core/Analyzers/ClassAnalyzer.cpp
   Core/Analyzers/ClassRefAnalyzer.cpp
+  Core/Analyzers/ProtocolAnalyzer.cpp
   Core/Analyzers/SelectorAnalyzer.cpp
   Core/Analyzers/SuperClassRefAnalyzer.cpp
   Core/BinaryViewFile.cpp

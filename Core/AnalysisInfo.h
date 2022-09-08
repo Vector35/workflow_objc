@@ -160,6 +160,37 @@ struct PropertyListInfo : AddressInfo {
     bool hasRelativeOffsets() const;
 };
 
+struct ProtocolInfo;
+
+using SharedProtocolInfo = std::shared_ptr<ProtocolInfo>;
+
+/**
+ * A description of an Objective-C protocol list.
+ */
+struct ProtocolListInfo : AddressInfo {
+    std::vector<RefInfo<SharedProtocolInfo>> protocols {};
+};
+
+
+/**
+ * A description of an Objective-C protocol.
+ */
+struct ProtocolInfo : AddressInfo {
+    AddressInfo isa {};
+    RefInfo<std::string> name {};
+    RefInfo<ProtocolListInfo> protocolList {};
+    RefInfo<MethodListInfo> instanceMethodList {};
+    RefInfo<MethodListInfo> classMethodList {};
+    RefInfo<MethodListInfo> optionalInstanceMethodList {};
+    RefInfo<MethodListInfo> optionalClassMethodList {};
+    RefInfo<PropertyListInfo> propertyList {};
+    uint32_t size;
+    uint32_t flags;
+    AddressInfo extendedMethodTypeList {};
+    RefInfo<std::string> demangledName {};
+    RefInfo<PropertyListInfo> classPropertyList {};
+};
+
 /**
  * A description of an Objective-C class.
  */
@@ -167,6 +198,7 @@ struct ClassInfo : AddressInfo {
     RefInfo<std::string> name {};
     AddressInfo data {};
     RefInfo<MethodListInfo> methodList {};
+    RefInfo<ProtocolListInfo> protocolList {};
     RefInfo<PropertyListInfo> propertyList {};
 };
 
@@ -191,6 +223,8 @@ struct AnalysisInfo {
     std::vector<ClassRefInfo> classes {};
     std::unordered_map<Address, AddressInfo> methodImpls;
 
+    std::vector<RefInfo<SharedProtocolInfo>> protocols {};
+    std::unordered_map<Address, SharedProtocolInfo> protocolsByKey {};
     std::unordered_map<Address, AddressInfo> propertiesByKey {};
 
     std::vector<SharedSelectorRefInfo> selectorRefs {};

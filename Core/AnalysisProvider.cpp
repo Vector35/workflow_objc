@@ -10,6 +10,7 @@
 #include "Analyzers/CFStringAnalyzer.h"
 #include "Analyzers/ClassAnalyzer.h"
 #include "Analyzers/ClassRefAnalyzer.h"
+#include "Analyzers/ProtocolAnalyzer.h"
 #include "Analyzers/SelectorAnalyzer.h"
 #include "Analyzers/SuperClassRefAnalyzer.h"
 
@@ -22,6 +23,7 @@ SharedAnalysisInfo AnalysisProvider::infoForFile(SharedAbstractFile file)
     std::vector<std::unique_ptr<ObjectiveNinja::Analyzer>> analyzers;
     analyzers.emplace_back(new CFStringAnalyzer(info, file));
     analyzers.emplace_back(new SelectorAnalyzer(info, file));
+    analyzers.emplace_back(new ProtocolAnalyzer(info, file));
     analyzers.emplace_back(new ClassAnalyzer(info, file));
     analyzers.emplace_back(new ClassRefAnalyzer(info, file));
     analyzers.emplace_back(new SuperClassRefAnalyzer(info, file));

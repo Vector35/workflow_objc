@@ -237,6 +237,8 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     auto classType = namedType(bv, CustomTypes::Class);
     auto classDataType = namedType(bv, CustomTypes::ClassRO);
     auto methodListType = namedType(bv, CustomTypes::MethodList);
+    auto protocolListType = namedType(bv, CustomTypes::ProtocolList);
+    auto protocolType = namedType(bv, CustomTypes::Protocol);
     auto propertyListType = namedType(bv, CustomTypes::PropertyList);
 
     // Create data variables and symbols for all CFString instances.
@@ -268,6 +270,101 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     auto totalMethods = std::size_t {0};
     auto totalProperties = std::size_t {0};
 
+    // Create data variables and symbols for the analyzed protocols.
+    for (const auto& pir : info->protocols) {
+        const auto& pi = pir.referenced;
+        if (pir.address) {
+            defineVariable(bv, pir.address, taggedPointerType);
+            defineSymbol(bv, pir.address, pi->name.referenced, "ptp_");
+            defineReference(bv, pir.address, pi->address);
+        }
+
+        defineVariable(bv, pi->address, protocolType);
+        defineSymbol(bv, pi->address, pi->name.referenced, "pt_");
+
+        if (pi->isa.address) {
+            defineSymbol(bv, pi->isa.address, pi->name.referenced, "pi_");
+            defineReference(bv, pi->address, pi->isa.address);
+        }
+        if (pi->name.address) {
+            defineVariable(bv, pi->name.address, stringType(pi->name.referenced.size()));
+            defineSymbol(bv, pi->name.address, pi->name.referenced, "pn_");
+            defineReference(bv, pi->address, pi->name.address);
+        }
+        if (pi->protocolList.address) {
+            defineSymbol(bv, pi->protocolList.address, pi->name.referenced, "pl_");
+            defineReference(bv, pi->address, pi->protocolList.address);
+        }
+        if (pi->instanceMethodList.address) {
+            defineSymbol(bv, pi->instanceMethodList.address, pi->name.referenced, "iml_");
+            defineReference(bv, pi->address, pi->instanceMethodList.address);
+        }
+        if (pi->classMethodList.address) {
+            defineSymbol(bv, pi->classMethodList.address, pi->name.referenced, "cml_");
+            defineReference(bv, pi->address, pi->classMethodList.address);
+        }
+        if (pi->optionalInstanceMethodList.address) {
+            defineSymbol(bv, pi->optionalInstanceMethodList.address, pi->name.referenced, "oiml_");
+            defineReference(bv, pi->address, pi->optionalInstanceMethodList.address);
+        }
+        if (pi->optionalClassMethodList.address) {
+            defineSymbol(bv, pi->optionalClassMethodList.address, pi->name.referenced, "ocml_");
+            defineReference(bv, pi->address, pi->optionalClassMethodList.address);
+        }
+        if (pi->propertyList.address) {
+            defineSymbol(bv, pi->propertyList.address, pi->name.referenced, "ql_");
+            defineReference(bv, pi->address, pi->propertyList.address);
+        }
+        if (pi->extendedMethodTypeList.address) {
+            auto extendedMethodTypeListSize =
+                pi->instanceMethodList.referenced.methods.size() +
+                pi->classMethodList.referenced.methods.size() +
+                pi->optionalInstanceMethodList.referenced.methods.size() +
+                pi->optionalClassMethodList.referenced.methods.size();
+            for (auto i = 0; i < extendedMethodTypeListSize; ++i) {
+                auto listAddress = pi->extendedMethodTypeList.address + i * 0x8;
+                defineReference(bv, pi->address, listAddress);
+            }
+        }
+        if (pi->demangledName.address) {
+            defineVariable(bv, pi->demangledName.address, stringType(pi->name.referenced.size()));
+            defineSymbol(bv, pi->demangledName.address, pi->name.referenced, "pdn_");
+            defineReference(bv, pi->address, pi->demangledName.address);
+        }
+        if (pi->classPropertyList.address) {
+            defineSymbol(bv, pi->classPropertyList.address, pi->name.referenced, "cql_");
+            defineReference(bv, pi->address, pi->classPropertyList.address);
+        }
+
+        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+            pi->name.referenced, pi->instanceMethodList.referenced, "iml_");
+        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+            pi->name.referenced, pi->classMethodList.referenced, "cml_");
+        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+            pi->name.referenced, pi->optionalInstanceMethodList.referenced, "oiml_");
+        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+            pi->name.referenced, pi->optionalClassMethodList.referenced, "ocml_");
+
+        if (pi->protocolList.address && !pi->protocolList.referenced.protocols.empty()) {
+            // Create a data variable and symbol for the protocol list header.
+            defineVariable(bv, pi->protocolList.address, protocolListType);
+            defineSymbol(bv, pi->protocolList.address, pi->name.referenced, "pl_");
+
+            // Create data variables for each protocol in the protocol list.
+            for (const auto& pir2 : pi->protocolList.referenced.protocols) {
+                const auto& pi2 = pir2.referenced;
+                defineVariable(bv, pir2.address, taggedPointerType);
+                defineSymbol(bv, pir2.address, pi2->name.referenced, "ptp_");
+
+                defineReference(bv, pi->protocolList.address, pir2.address);
+                defineReference(bv, pir2.address, pi2->address);
+            }
+        }
+
+        applyPropertyListType(bv, propertyListType, totalProperties,
+            pi->name.referenced, pi->propertyList.referenced, "ql_");
+    }
+
     std::map<ObjectiveNinja::Address, std::string> addressToClassMap;
 
     // Create data variables and symbols for the analyzed classes.
@@ -298,12 +395,31 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
         if (ci.methodList.address) {
             defineReference(bv, ci.data.address, ci.methodList.address);
         }
+        if (ci.protocolList.address) {
+            defineReference(bv, ci.data.address, ci.protocolList.address);
+        }
         if (ci.propertyList.address) {
             defineReference(bv, ci.data.address, ci.propertyList.address);
         }
 
         applyMethodListType(info, bv, taggedPointerType, methodListType,
             totalMethods, ci.name.referenced, ci.methodList.referenced, "ml_");
+
+        if (ci.protocolList.address && !ci.protocolList.referenced.protocols.empty()) {
+            // Create a data variable and symbol for the protocol list header.
+            defineVariable(bv, ci.protocolList.address, protocolListType);
+            defineSymbol(bv, ci.protocolList.address, ci.name.referenced, "pl_");
+
+            // Create data variables for each protocol in the protocol list.
+            for (const auto& pir : ci.protocolList.referenced.protocols) {
+                const auto& pi = pir.referenced;
+                defineVariable(bv, pir.address, taggedPointerType);
+                defineSymbol(bv, pir.address, pi->name.referenced, "ptp_");
+
+                defineReference(bv, ci.protocolList.address, pir.address);
+                defineReference(bv, pir.address, pi->address);
+            }
+        }
 
         applyPropertyListType(bv, propertyListType, totalProperties,
             ci.name.referenced, ci.propertyList.referenced, "ql_");
@@ -336,8 +452,8 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
 
     const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
     log->LogInfo("Analysis results applied in %lu ms", elapsed.count());
-    log->LogInfo("Found %d classes, %d methods, %d selector references, %d properties",
-        info->classes.size(), totalMethods, info->selectorRefs.size(), totalProperties);
+    log->LogInfo("Found %d classes, %d protocols, %d methods, %d selector references, %d properties",
+        info->classes.size(), info->protocols.size(), totalMethods, info->selectorRefs.size(), totalProperties);
     log->LogInfo("Found %d CFString instances", info->cfStrings.size());
     log->LogInfo("Found %d class references", info->classRefs.size());
     log->LogInfo("Found %d super-class references", info->superClassRefs.size());
