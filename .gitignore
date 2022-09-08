@@ -1,4 +1,5 @@
 build/
+Vendor/
 
 cmake-build-*/
 .idea/
