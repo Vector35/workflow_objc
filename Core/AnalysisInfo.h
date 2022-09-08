@@ -9,46 +9,104 @@
 
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
 namespace ObjectiveNinja {
 
+using Address = uint64_t;
+
+/**
+ * A description of an address.
+ */
+struct AddressInfo {
+    Address address {};
+
+    AddressInfo() noexcept = default;
+    AddressInfo(Address address) noexcept : address(address) {}
+};
+
+/**
+ * A description of a list entry, including its containing list.
+ */
+template<typename T>
+struct ListEntryInfo {
+    AddressInfo list {};
+    T entry {};
+
+    ListEntryInfo() noexcept = default;
+    template<typename... Args>
+    ListEntryInfo(Address listAddress, Args&&... entryArgs) : list(listAddress), entry(std::forward<Args>(entryArgs)...) {}
+};
+
+/**
+ * A description of a reference.
+ */
+template<typename T>
+struct RefInfo : AddressInfo {
+    T referenced {};
+
+    RefInfo() noexcept = default;
+    template<typename... Args>
+    RefInfo(Address address, Args&&... referencedArgs) : AddressInfo(address), referenced(std::forward<Args>(referencedArgs)...) {}
+};
+
+/**
+ * A description of an address reference.
+ */
+using AddressRefInfo = RefInfo<AddressInfo>;
+
+/**
+ * A description of an unresolved address.
+ */
+struct UnresolvedAddressInfo {
+    Address unresolvedAddress {};
+
+    UnresolvedAddressInfo() noexcept = default;
+    UnresolvedAddressInfo(Address unresolvedAddress) : unresolvedAddress(unresolvedAddress) {}
+};
+
+/**
+ * A description of a resolved value, including its unresolved address.
+ */
+template<typename T>
+struct UnresolvedInfo : UnresolvedAddressInfo {
+    T resolved {};
+
+    UnresolvedInfo() noexcept = default;
+    template<typename... Args>
+    UnresolvedInfo(Address unresolvedAddress, Args&&... resolvedArgs) : UnresolvedAddressInfo(unresolvedAddress), resolved(std::forward<Args>(resolvedArgs)...) {}
+};
+
 /**
  * A description of a CFString instance.
  */
-struct CFStringInfo {
-    uint64_t address {};
-    uint64_t dataAddress {};
+struct CFStringInfo : AddressInfo {
+    AddressInfo data {};
     size_t size {};
 };
 
 /**
+ * A description of a selector name.
+ */
+using SelectorNameInfo = RefInfo<std::string>;
+
+/**
  * A description of a selector reference.
  */
-struct SelectorRefInfo {
-    uint64_t address {};
-
-    std::string name {};
-
-    uint64_t rawSelector {};
-    uint64_t nameAddress {};
-};
+using SelectorRefInfo = RefInfo<UnresolvedInfo<SelectorNameInfo>>;
 
 using SharedSelectorRefInfo = std::shared_ptr<SelectorRefInfo>;
 
 /**
  * A description of an Objective-C method.
  */
-struct MethodInfo {
-    uint64_t address {};
-
-    std::string selector;
-    std::string type;
-
-    uint64_t nameAddress {};
-    uint64_t typeAddress {};
-    uint64_t implAddress {};
+struct MethodInfo : AddressInfo {
+    RefInfo<std::string> selectorName {};
+    RefInfo<std::string> type {};
+    AddressInfo impl {};
+    ListEntryInfo<RefInfo<std::string>> extendedType;
 
     /**
      * Get the selector as a series of tokens, split at ':' characters.
@@ -64,9 +122,9 @@ struct MethodInfo {
 /**
  * A description of an Objective-C method list.
  */
-struct MethodListInfo {
-    uint64_t address {};
-    uint32_t flags {};
+struct MethodListInfo : AddressInfo {
+    uint16_t entsize {};
+    uint16_t flags {};
     std::vector<MethodInfo> methods {};
 
     /**
@@ -83,22 +141,16 @@ struct MethodListInfo {
 /**
  * A description of an Objective-C class.
  */
-struct ClassInfo {
-    uint64_t address {};
-
-    std::string name {};
-    MethodListInfo methodList {};
-
-    uint64_t listPointer {};
-    uint64_t dataAddress {};
-    uint64_t nameAddress {};
-    uint64_t methodListAddress {};
+struct ClassInfo : AddressInfo {
+    RefInfo<std::string> name {};
+    AddressInfo data {};
+    RefInfo<MethodListInfo> methodList {};
 };
 
-struct ClassRefInfo {
-    uint64_t address;
-    uint64_t referencedAddress;
-};
+/**
+ * A description of an Objective-C class reference.
+ */
+using ClassRefInfo = RefInfo<ClassInfo>;
 
 /**
  * Analysis info storage.
@@ -110,13 +162,16 @@ struct ClassRefInfo {
 struct AnalysisInfo {
     std::vector<CFStringInfo> cfStrings {};
 
-    std::vector<ClassRefInfo> classRefs {};
-    std::vector<ClassRefInfo> superClassRefs {};
-    std::vector<SharedSelectorRefInfo> selectorRefs {};
-    std::unordered_map<uint64_t, SharedSelectorRefInfo> selectorRefsByKey {};
+    std::vector<AddressRefInfo> classRefs {};
+    std::vector<AddressRefInfo> superClassRefs {};
 
-    std::vector<ClassInfo> classes {};
-    std::unordered_map<uint64_t, uint64_t> methodImpls;
+    std::vector<ClassRefInfo> classes {};
+    std::unordered_map<Address, AddressInfo> methodImpls;
+
+    std::unordered_map<Address, AddressInfo> propertiesByKey {};
+
+    std::vector<SharedSelectorRefInfo> selectorRefs {};
+    std::unordered_map<Address, SharedSelectorRefInfo> selectorRefsByKey {};
 
     std::string dump() const;
 };

@@ -29,7 +29,7 @@ protected:
     /**
      * Automatically resolve a pointer.
      */
-    uint64_t arp(uint64_t pointer) const
+    ObjectiveNinja::Address arp(ObjectiveNinja::Address pointer) const
     {
         return ABI::decodePointer(pointer, m_file->imageBase());
     }

@@ -31,6 +31,7 @@ public:
     void seek(uint64_t) override;
 
     uint8_t readByte() override;
+    uint16_t readShort() override;
     uint32_t readInt() override;
     uint64_t readLong() override;
 

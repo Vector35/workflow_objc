@@ -12,11 +12,9 @@
 
 namespace ObjectiveNinja {
 
-constexpr auto FlagsMask = 0xFFFF0000;
-
 std::vector<std::string> MethodInfo::selectorTokens() const
 {
-    std::stringstream r(selector);
+    std::stringstream r(selectorName.referenced);
 
     std::string token;
     std::vector<std::string> result;
@@ -28,17 +26,17 @@ std::vector<std::string> MethodInfo::selectorTokens() const
 
 std::vector<std::string> MethodInfo::decodedTypeTokens() const
 {
-    return TypeParser::parseEncodedType(type);
+    return TypeParser::parseEncodedType(type.referenced);
 }
 
 bool MethodListInfo::hasRelativeOffsets() const
 {
-    return (flags & FlagsMask) & 0x80000000;
+    return flags & 0x8000;
 }
 
 bool MethodListInfo::hasDirectSelectors() const
 {
-    return (flags & FlagsMask) & 0x40000000;
+    return flags & 0x4000;
 }
 
 std::string AnalysisInfo::dump() const

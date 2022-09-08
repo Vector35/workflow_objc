@@ -100,10 +100,10 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     // Attempt to look up the implementation for the given selector, first by
     // using the raw selector, then by the address of the selector reference. If
     // the lookup fails in both cases, abort.
-    uint64_t implAddress = info->methodImpls[selectorRef->rawSelector];
-    if (!implAddress)
-        implAddress = info->methodImpls[selectorRef->address];
-    if (!implAddress)
+    auto impl = info->methodImpls[selectorRef->referenced.unresolvedAddress];
+    if (!impl.address)
+        impl = info->methodImpls[selectorRef->address];
+    if (!impl.address)
         return;
 
     const auto llilIndex = ssa->GetNonSSAInstructionIndex(insnIndex);
@@ -113,7 +113,7 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     // the method implementation. This turns the "indirect call" piped through
     // `objc_msgSend` and makes it a normal C-style function call.
     auto callDestExpr = llilInsn.GetDestExpr<LLIL_CALL>();
-    callDestExpr.Replace(llil->ConstPointer(callDestExpr.size, implAddress, callDestExpr));
+    callDestExpr.Replace(llil->ConstPointer(callDestExpr.size, impl.address, callDestExpr));
     llilInsn.Replace(llil->Call(callDestExpr.exprIndex, llilInsn));
 
     llil->GenerateSSAForm();

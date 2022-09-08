@@ -32,6 +32,21 @@ public:
     virtual uint8_t readByte() = 0;
 
     /**
+     * Read a byte at the given offset.
+     */
+    uint8_t readByte(uint64_t offset);
+
+    /**
+     * Read a 16-bit integer at the current reader offset.
+     */
+    virtual uint16_t readShort() = 0;
+
+    /**
+     * Read a 16-bit integer at the given offset.
+     */
+    uint16_t readShort(uint64_t offset);
+
+    /**
      * Read a 32-bit integer at the current reader offset.
      */
     virtual uint32_t readInt() = 0;

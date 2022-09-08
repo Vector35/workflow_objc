@@ -46,19 +46,19 @@ class InfoHandler {
     /**
      * Shorthand function for defining a user data variable.
      */
-    static inline void defineVariable(BinaryViewRef, uint64_t, TypeRef);
+    static inline void defineVariable(BinaryViewRef, ObjectiveNinja::Address, TypeRef);
 
     /**
      * Shorthand function for defining a user symbol, with an optional prefix.
      */
-    static inline void defineSymbol(BinaryViewRef, uint64_t,
+    static inline void defineSymbol(BinaryViewRef, ObjectiveNinja::Address,
         const std::string& name, const std::string& prefix = "",
         BNSymbolType type = DataSymbol);
 
     /**
      * Shorthand function for defining a user data reference.
      */
-    static inline void defineReference(BinaryViewRef bv, uint64_t from, uint64_t to);
+    static inline void defineReference(BinaryViewRef bv, ObjectiveNinja::Address from, ObjectiveNinja::Address to);
 
     /**
      * Create a symbol and apply return/argument types for a method.

@@ -25,13 +25,13 @@ void SelectorAnalyzer::run()
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
         auto ssri = std::make_shared<SelectorRefInfo>();
         ssri->address = address;
-        ssri->rawSelector = m_file->readLong(address);
-        ssri->nameAddress = arp(ssri->rawSelector);
-        ssri->name = m_file->readStringAt(ssri->nameAddress);
+        ssri->referenced.unresolvedAddress = m_file->readLong(address);
+        ssri->referenced.resolved.address = arp(ssri->referenced.unresolvedAddress);
+        ssri->referenced.resolved.referenced = m_file->readStringAt(ssri->referenced.resolved.address);
 
         m_info->selectorRefs.emplace_back(ssri);
 
-        m_info->selectorRefsByKey[ssri->rawSelector] = ssri;
+        m_info->selectorRefsByKey[ssri->referenced.unresolvedAddress] = ssri;
         m_info->selectorRefsByKey[ssri->address] = ssri;
     }
 }

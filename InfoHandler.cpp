@@ -53,18 +53,18 @@ TypeRef InfoHandler::stringType(size_t size)
     return Type::ArrayType(Type::IntegerType(1, true), size + 1);
 }
 
-void InfoHandler::defineVariable(BinaryViewRef bv, uint64_t address, TypeRef type)
+void InfoHandler::defineVariable(BinaryViewRef bv, ObjectiveNinja::Address address, TypeRef type)
 {
     bv->DefineUserDataVariable(address, type);
 }
 
-void InfoHandler::defineSymbol(BinaryViewRef bv, uint64_t address, const std::string& name,
+void InfoHandler::defineSymbol(BinaryViewRef bv, ObjectiveNinja::Address address, const std::string& name,
     const std::string& prefix, BNSymbolType symbolType)
 {
     bv->DefineUserSymbol(new Symbol(symbolType, prefix + name, address));
 }
 
-void InfoHandler::defineReference(BinaryViewRef bv, uint64_t from, uint64_t to)
+void InfoHandler::defineReference(BinaryViewRef bv, ObjectiveNinja::Address from, ObjectiveNinja::Address to)
 {
     bv->AddUserDataReference(from, to);
 }
@@ -79,7 +79,7 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassI
     // never happened and likely won't ever happen, but crashing the product is
     // generally undesirable, so it's better to be safe than sorry.
     if (selectorTokens.size() > typeTokens.size()) {
-        LogWarn("Cannot apply method type to %" PRIx64 " due to selector/type token size mismatch.", mi.implAddress);
+        LogWarn("Cannot apply method type to %" PRIx64 " due to selector/type token size mismatch.", mi.impl.address);
         return;
     }
 
@@ -131,14 +131,14 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassI
         auto functionType = tpResult.functions[0].type;
 
         // Search for the method's implementation function; apply the type if found.
-        if (auto f = bv->GetAnalysisFunction(bv->GetDefaultPlatform(), mi.implAddress))
+        if (auto f = bv->GetAnalysisFunction(bv->GetDefaultPlatform(), mi.impl.address))
             f->SetUserType(functionType);
     }
 
     // TODO: Use '+' or '-' conditionally once class methods are supported. For
     // right now, only instance methods are analyzed and we can just use '-'.
-    auto name = "-[" + ci.name + " " + mi.selector + "]";
-    defineSymbol(bv, mi.implAddress, name, "", FunctionSymbol);
+    auto name = "-[" + ci.name.referenced + " " + mi.selectorName.referenced + "]";
+    defineSymbol(bv, mi.impl.address, name, "", FunctionSymbol);
 }
 
 void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
@@ -157,84 +157,85 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
 
     // Create data variables and symbols for all CFString instances.
     for (const auto& csi : info->cfStrings) {
-        reader.Seek(csi.dataAddress);
+        reader.Seek(csi.data.address);
         auto text = reader.ReadString(csi.size + 1);
         auto sanitizedText = sanitizeText(text);
 
         defineVariable(bv, csi.address, cfStringType);
-        defineVariable(bv, csi.dataAddress, stringType(csi.size));
+        defineVariable(bv, csi.data.address, stringType(csi.size));
         defineSymbol(bv, csi.address, sanitizedText, "cf_");
-        defineSymbol(bv, csi.dataAddress, sanitizedText, "as_");
+        defineSymbol(bv, csi.data.address, sanitizedText, "as_");
 
-        defineReference(bv, csi.address, csi.dataAddress);
+        defineReference(bv, csi.address, csi.data.address);
     }
 
     // Create data variables and symbols for selectors and selector references.
     for (const auto& sr : info->selectorRefs) {
-        auto sanitizedSelector = sanitizeSelector(sr->name);
+        auto sanitizedSelector = sanitizeSelector(sr->referenced.resolved.referenced);
 
         defineVariable(bv, sr->address, taggedPointerType);
-        defineVariable(bv, sr->nameAddress, stringType(sr->name.size()));
+        defineVariable(bv, sr->referenced.resolved.address, stringType(sr->referenced.resolved.referenced.size()));
         defineSymbol(bv, sr->address, sanitizedSelector, "sr_");
-        defineSymbol(bv, sr->nameAddress, sanitizedSelector, "sl_");
+        defineSymbol(bv, sr->referenced.resolved.address, sanitizedSelector, "sl_");
 
-        defineReference(bv, sr->address, sr->nameAddress);
+        defineReference(bv, sr->address, sr->referenced.resolved.address);
     }
 
     unsigned totalMethods = 0;
 
-    std::map<uint64_t, std::string> addressToClassMap;
+    std::map<ObjectiveNinja::Address, std::string> addressToClassMap;
 
     // Create data variables and symbols for the analyzed classes.
-    for (const auto& ci : info->classes) {
-        defineVariable(bv, ci.listPointer, taggedPointerType);
+    for (const auto& cir : info->classes) {
+        const auto& ci = cir.referenced;
+        defineVariable(bv, cir.address, taggedPointerType);
         defineVariable(bv, ci.address, classType);
-        defineVariable(bv, ci.dataAddress, classDataType);
-        defineVariable(bv, ci.nameAddress, stringType(ci.name.size()));
-        defineSymbol(bv, ci.listPointer, ci.name, "cp_");
-        defineSymbol(bv, ci.address, ci.name, "cl_");
-        addressToClassMap[ci.address] = ci.name;
-        defineSymbol(bv, ci.dataAddress, ci.name, "ro_");
-        defineSymbol(bv, ci.nameAddress, ci.name, "nm_");
+        defineVariable(bv, ci.data.address, classDataType);
+        defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
+        defineSymbol(bv, cir.address, ci.name.referenced, "cp_");
+        defineSymbol(bv, ci.address, ci.name.referenced, "cl_");
+        addressToClassMap[ci.address] = ci.name.referenced;
+        defineSymbol(bv, ci.data.address, ci.name.referenced, "ro_");
+        defineSymbol(bv, ci.name.address, ci.name.referenced, "nm_");
 
-        defineReference(bv, ci.listPointer, ci.address);
-        defineReference(bv, ci.address, ci.dataAddress);
-        defineReference(bv, ci.dataAddress, ci.nameAddress);
-        defineReference(bv, ci.dataAddress, ci.methodListAddress);
+        defineReference(bv, cir.address, ci.address);
+        defineReference(bv, ci.address, ci.data.address);
+        defineReference(bv, ci.data.address, ci.name.address);
+        defineReference(bv, ci.data.address, ci.methodList.address);
 
-        if (ci.methodList.address == 0 || ci.methodList.methods.empty())
+        if (ci.methodList.address == 0 || ci.methodList.referenced.methods.empty())
             continue;
 
-        auto methodType = ci.methodList.hasRelativeOffsets()
+        auto methodType = ci.methodList.referenced.hasRelativeOffsets()
             ? bv->GetTypeByName(CustomTypes::MethodListEntry)
             : bv->GetTypeByName(CustomTypes::Method);
 
         // Create data variables for each method in the method list.
-        for (const auto& mi : ci.methodList.methods) {
+        for (const auto& mi : ci.methodList.referenced.methods) {
             ++totalMethods;
 
             defineVariable(bv, mi.address, methodType);
-            defineSymbol(bv, mi.address, sanitizeSelector(mi.selector), "mt_");
-            defineVariable(bv, mi.typeAddress, stringType(mi.type.size()));
+            defineSymbol(bv, mi.address, sanitizeSelector(mi.selectorName.referenced), "mt_");
+            defineVariable(bv, mi.type.address, stringType(mi.type.referenced.size()));
 
             defineReference(bv, ci.methodList.address, mi.address);
-            defineReference(bv, mi.address, mi.nameAddress);
-            defineReference(bv, mi.address, mi.typeAddress);
-            defineReference(bv, mi.address, mi.implAddress);
+            defineReference(bv, mi.address, mi.selectorName.address);
+            defineReference(bv, mi.address, mi.type.address);
+            defineReference(bv, mi.address, mi.impl.address);
 
             applyMethodType(bv, ci, mi);
         }
 
         // Create a data variable and symbol for the method list header.
-        defineVariable(bv, ci.methodListAddress, methodListType);
-        defineSymbol(bv, ci.methodListAddress, ci.name, "ml_");
+        defineVariable(bv, ci.methodList.address, methodListType);
+        defineSymbol(bv, ci.methodList.address, ci.name.referenced, "ml_");
     }
 
     for (const auto classRef : info->classRefs) {
         bv->DefineDataVariable(classRef.address, taggedPointerType);
 
-        if (classRef.referencedAddress != 0) {
-            auto localClass = addressToClassMap.find(classRef.referencedAddress);
+        if (classRef.referenced.address != 0) {
+            auto localClass = addressToClassMap.find(classRef.referenced.address);
             if (localClass != addressToClassMap.end())
                 defineSymbol(bv, classRef.address, localClass->second, "cr_");
         }
@@ -243,10 +244,10 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     for (const auto superClassRef : info->superClassRefs) {
         bv->DefineDataVariable(superClassRef.address, taggedPointerType);
 
-        if (superClassRef.referencedAddress == 0)
+        if (superClassRef.referenced.address == 0)
             continue;
 
-        auto localClass = addressToClassMap.find(superClassRef.referencedAddress);
+        auto localClass = addressToClassMap.find(superClassRef.referenced.address);
         if (localClass != addressToClassMap.end())
             defineSymbol(bv, superClassRef.address, localClass->second, "su_");
     }

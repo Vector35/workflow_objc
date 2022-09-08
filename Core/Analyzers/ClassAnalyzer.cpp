@@ -15,41 +15,42 @@ ClassAnalyzer::ClassAnalyzer(SharedAnalysisInfo info,
 {
 }
 
-MethodListInfo ClassAnalyzer::analyzeMethodList(uint64_t address)
+MethodListInfo ClassAnalyzer::analyzeMethodList(Address address)
 {
-    MethodListInfo mli;
+    auto mli = MethodListInfo {};
     mli.address = address;
-    mli.flags = m_file->readInt(mli.address);
+    mli.entsize = m_file->readShort(mli.address);
+    mli.flags = m_file->readShort(mli.address + 0x2);
 
     auto methodCount = m_file->readInt(mli.address + 0x4);
     auto methodSize = mli.hasRelativeOffsets() ? 12 : 24;
 
     for (unsigned i = 0; i < methodCount; ++i) {
-        MethodInfo mi;
+        auto mi = MethodInfo {};
         mi.address = mli.address + 8 + (i * methodSize);
 
         m_file->seek(mi.address);
 
         if (mli.hasRelativeOffsets()) {
-            mi.nameAddress = mi.address + static_cast<int32_t>(m_file->readInt());
-            mi.typeAddress = mi.address + 4 + static_cast<int32_t>(m_file->readInt());
-            mi.implAddress = mi.address + 8 + static_cast<int32_t>(m_file->readInt());
+            mi.selectorName.address = mi.address + static_cast<int32_t>(m_file->readInt());
+            mi.type.address = mi.address + 4 + static_cast<int32_t>(m_file->readInt());
+            mi.impl.address = mi.address + 8 + static_cast<int32_t>(m_file->readInt());
         } else {
-            mi.nameAddress = arp(m_file->readLong());
-            mi.typeAddress = arp(m_file->readLong());
-            mi.implAddress = arp(m_file->readLong());
+            mi.selectorName.address = arp(m_file->readLong());
+            mi.type.address = arp(m_file->readLong());
+            mi.impl.address = arp(m_file->readLong());
         }
 
         if (!mli.hasRelativeOffsets() || mli.hasDirectSelectors()) {
-            mi.selector = m_file->readStringAt(mi.nameAddress);
+            mi.selectorName.referenced = m_file->readStringAt(mi.selectorName.address);
         } else {
-            auto selectorNamePointer = arp(m_file->readLong(mi.nameAddress));
-            mi.selector = m_file->readStringAt(selectorNamePointer);
+            auto selectorNamePointer = arp(m_file->readLong(mi.selectorName.address));
+            mi.selectorName.referenced = m_file->readStringAt(selectorNamePointer);
         }
 
-        mi.type = m_file->readStringAt(mi.typeAddress);
+        mi.type.referenced = m_file->readStringAt(mi.type.address);
 
-        m_info->methodImpls[mi.nameAddress] = mi.implAddress;
+        m_info->methodImpls[mi.selectorName.address] = mi.impl;
 
         mli.methods.emplace_back(mi);
     }
@@ -65,23 +66,22 @@ void ClassAnalyzer::run()
         return;
 
     for (auto address = sectionStart; address < sectionEnd; address += 8) {
-        ClassInfo ci;
-        ci.listPointer = address;
+        auto ci = ClassInfo {};
         ci.address = arp(m_file->readLong(address));
-        ci.dataAddress = arp(m_file->readLong(ci.address + 0x20));
+        ci.data.address = arp(m_file->readLong(ci.address + 0x20));
 
         // Sometimes the lower two bits of the data address are used as flags
         // for Swift/Objective-C classes. They should be ignored, unless you
         // want incorrect analysis...
-        ci.dataAddress &= ~ABI::FastPointerDataMask;
+        ci.data.address &= ~ABI::FastPointerDataMask;
 
-        ci.nameAddress = arp(m_file->readLong(ci.dataAddress + 0x18));
-        ci.name = m_file->readStringAt(ci.nameAddress);
+        ci.name.address = arp(m_file->readLong(ci.data.address + 0x18));
+        ci.name.referenced = m_file->readStringAt(ci.name.address);
 
-        ci.methodListAddress = arp(m_file->readLong(ci.dataAddress + 0x20));
-        if (ci.methodListAddress)
-            ci.methodList = analyzeMethodList(ci.methodListAddress);
+        ci.methodList.address = arp(m_file->readLong(ci.data.address + 0x20));
+        if (ci.methodList.address)
+            ci.methodList.referenced = analyzeMethodList(ci.methodList.address);
 
-        m_info->classes.emplace_back(ci);
+        m_info->classes.emplace_back(address, ci);
     }
 }

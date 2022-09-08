@@ -27,6 +27,11 @@ uint8_t BinaryViewFile::readByte()
     return m_reader.Read8();
 }
 
+uint16_t BinaryViewFile::readShort()
+{
+    return m_reader.Read16();
+}
+
 uint32_t BinaryViewFile::readInt()
 {
     return m_reader.Read32();
