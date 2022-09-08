@@ -188,11 +188,11 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
                     auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
 
                     params.push_back({"self",
-                        BinaryNinja::Type::NamedType(bv, {"id"}),
+                        BinaryNinja::Type::NamedType(bv, {CustomTypes::ID}),
                         true,
                         BinaryNinja::Variable()});
                     params.push_back({"sel",
-                        BinaryNinja::Type::PointerType(bv->GetAddressSize(), BinaryNinja::Type::IntegerType(1, false)),
+                        BinaryNinja::Type::NamedType(bv, {CustomTypes::Selector}),
                         true,
                         BinaryNinja::Variable()});
 

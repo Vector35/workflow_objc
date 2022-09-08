@@ -14,20 +14,27 @@
  */
 namespace CustomTypes {
 
-const std::string TaggedPointer = "tptr_t";
 const std::string FastPointer = "fptr_t";
 const std::string RelativePointer = "rptr_t";
+const std::string TaggedPointer = "tptr_t";
 
 const std::string ID = "id";
 const std::string Selector = "SEL";
 
+const std::string BOOL = "BOOL";
+const std::string CGFloat = "CGFloat";
+const std::string NSInteger = "NSInteger";
+const std::string NSUInteger = "NSUInteger";
+
 const std::string CFString = "CFString";
 
-const std::string MethodList = "objc_method_list_t";
-const std::string Method = "objc_method_t";
-const std::string MethodListEntry = "objc_method_entry_t";
 const std::string Class = "objc_class_t";
 const std::string ClassRO = "objc_class_ro_t";
+const std::string InterfaceVariable = "objc_ivar_t";
+const std::string InterfaceVariableList = "objc_ivar_t";
+const std::string Method = "objc_method_t";
+const std::string MethodList = "objc_method_list_t";
+const std::string MethodListEntry = "objc_method_entry_t";
 
 /**
  * Define all Objective-C-related types for a view.

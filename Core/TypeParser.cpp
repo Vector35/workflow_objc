@@ -7,6 +7,8 @@
 
 #include "TypeParser.h"
 
+#include "../CustomTypes.h"
+
 #include <map>
 
 namespace ObjectiveNinja {
@@ -23,17 +25,17 @@ static const std::map<char, std::string> TypeEncodingMap = {
     { 'L', "unsigned long" },
     { 'f', "float" },
     { 'A', "uint8_t" },
-    { 'b', "BOOL" },
-    { 'B', "BOOL" },
+    { 'b', CustomTypes::BOOL },
+    { 'B', CustomTypes::BOOL },
 
-    { 'q', "NSInteger" },
-    { 'Q', "NSUInteger" },
-    { 'd', "CGFloat" },
+    { 'q', CustomTypes::NSInteger },
+    { 'Q', CustomTypes::NSUInteger },
+    { 'd', CustomTypes::CGFloat },
     { '*', "char *" },
 
-    { '@', "id" },
-    { ':', "SEL" },
-    { '#', "objc_class_t" },
+    { '@', CustomTypes::ID },
+    { ':', CustomTypes::Selector },
+    { '#', CustomTypes::Class },
 
     { '?', "void*" },
     { 'T', "void*" },

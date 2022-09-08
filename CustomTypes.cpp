@@ -29,51 +29,52 @@ std::pair<QualifiedName, Ref<Type>> finalizeStructureBuilder(Ref<BinaryView> bv,
 /**
  * Helper method for defining typedefs.
  */
-inline void defineTypedef(Ref<BinaryView> bv, const QualifiedName name, Ref<Type> type)
+inline std::pair<QualifiedName, Ref<Type>> defineTypedef(Ref<BinaryView> bv, const QualifiedName name, Ref<Type> type)
 {
     auto typeID = Type::GenerateAutoTypeId("objc", name);
-    bv->DefineType(typeID, name, type);
+    auto typedefQualName = bv->DefineType(typeID, name, type);
+    return {typedefQualName, Type::NamedType(bv, typedefQualName)};
 }
 
 void defineAll(Ref<BinaryView> bv)
 {
     int addrSize = bv->GetAddressSize();
 
-    defineTypedef(bv, {CustomTypes::TaggedPointer}, Type::PointerType(addrSize, Type::VoidType()));
-    defineTypedef(bv, {CustomTypes::FastPointer}, Type::PointerType(addrSize, Type::VoidType()));
-    defineTypedef(bv, {CustomTypes::RelativePointer}, Type::IntegerType(4, true));
+    auto type = defineTypedef(bv, {CustomTypes::FastPointer}, Type::PointerType(addrSize, Type::VoidType()));
+    type = defineTypedef(bv, {CustomTypes::RelativePointer}, Type::IntegerType(4, true));
+    type = defineTypedef(bv, {CustomTypes::TaggedPointer}, Type::PointerType(addrSize, Type::VoidType()));
 
-    defineTypedef(bv, {"id"}, Type::PointerType(addrSize, Type::VoidType()));
-    defineTypedef(bv, {"SEL"}, Type::PointerType(addrSize, Type::IntegerType(1, false)));
+    type = defineTypedef(bv, {CustomTypes::ID}, Type::PointerType(addrSize, Type::VoidType()));
+    type = defineTypedef(bv, {CustomTypes::Selector}, Type::PointerType(addrSize, Type::IntegerType(1, false)));
 
-    defineTypedef(bv, {"BOOL"}, Type::IntegerType(1, false));
-    defineTypedef(bv, {"NSInteger"}, Type::IntegerType(addrSize, true));
-    defineTypedef(bv, {"NSUInteger"}, Type::IntegerType(addrSize, false));
-    defineTypedef(bv, {"CGFloat"}, Type::FloatType(addrSize));
+    type = defineTypedef(bv, {CustomTypes::BOOL}, Type::IntegerType(1, false));
+    type = defineTypedef(bv, {CustomTypes::NSInteger}, Type::IntegerType(addrSize, true));
+    type = defineTypedef(bv, {CustomTypes::NSUInteger}, Type::IntegerType(addrSize, false));
+    type = defineTypedef(bv, {CustomTypes::CGFloat}, Type::FloatType(addrSize));
 
     StructureBuilder cfstringStructBuilder;
-    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType() ), "isa");
+    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "isa");
     cfstringStructBuilder.AddMember(Type::IntegerType(addrSize, false), "flags");
-    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType() ), "data");
+    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "data");
     cfstringStructBuilder.AddMember(Type::IntegerType(addrSize, false), "size");
-    auto type = finalizeStructureBuilder(bv, cfstringStructBuilder, "CFString");
+    type = finalizeStructureBuilder(bv, cfstringStructBuilder, CustomTypes::CFString);
 
-    StructureBuilder methodEntry;
-    methodEntry.AddMember(Type::IntegerType(4, true), "name");
-    methodEntry.AddMember(Type::IntegerType(4, true), "types");
-    methodEntry.AddMember(Type::IntegerType(4, true), "imp");
-    type = finalizeStructureBuilder(bv, methodEntry, "objc_method_entry_t");
+    StructureBuilder methodEntryBuilder;
+    methodEntryBuilder.AddMember(Type::IntegerType(4, true), "name");
+    methodEntryBuilder.AddMember(Type::IntegerType(4, true), "types");
+    methodEntryBuilder.AddMember(Type::IntegerType(4, true), "imp");
+    type = finalizeStructureBuilder(bv, methodEntryBuilder, CustomTypes::MethodListEntry);
 
-    StructureBuilder method;
-    method.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
-    method.AddMember(Type::PointerType(addrSize, Type::VoidType()), "types");
-    method.AddMember(Type::PointerType(addrSize, Type::VoidType()), "imp");
-    type = finalizeStructureBuilder(bv, method, "objc_method_t");
+    StructureBuilder methodBuilder;
+    methodBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
+    methodBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "types");
+    methodBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "imp");
+    type = finalizeStructureBuilder(bv, methodBuilder, CustomTypes::Method);
 
-    StructureBuilder methList;
-    methList.AddMember(Type::IntegerType(4, false), "obsolete");
-    methList.AddMember(Type::IntegerType(4, false), "count");
-    type = finalizeStructureBuilder(bv, methList, "objc_method_list_t");
+    StructureBuilder methListBuilder;
+    methListBuilder.AddMember(Type::IntegerType(4, false), "obsolete");
+    methListBuilder.AddMember(Type::IntegerType(4, false), "count");
+    type = finalizeStructureBuilder(bv, methListBuilder, CustomTypes::MethodList);
 
     StructureBuilder classROBuilder;
     classROBuilder.AddMember(Type::IntegerType(4, false), "flags");
@@ -88,7 +89,7 @@ void defineAll(Ref<BinaryView> bv)
     classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "ivars");
     classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "weak_ivar_layout");
     classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "properties");
-    type = finalizeStructureBuilder(bv, classROBuilder, "objc_class_ro_t");
+    type = finalizeStructureBuilder(bv, classROBuilder, CustomTypes::ClassRO);
 
     StructureBuilder classBuilder;
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "isa");
@@ -96,20 +97,20 @@ void defineAll(Ref<BinaryView> bv)
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "cache");
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "vtable");
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "data");
-    type = finalizeStructureBuilder(bv, classBuilder, "objc_class_t");
+    type = finalizeStructureBuilder(bv, classBuilder, CustomTypes::Class);
 
-    StructureBuilder ivarBuilder;
-    ivarBuilder.AddMember(Type::PointerType(addrSize, Type::IntegerType(4, false)), "offset");
-    ivarBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
-    ivarBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "type");
-    ivarBuilder.AddMember(Type::IntegerType(4, false), "alignment");
-    ivarBuilder.AddMember(Type::IntegerType(4, false), "size");
-    type = finalizeStructureBuilder(bv, ivarBuilder, "objc_ivar_t");
+    StructureBuilder instanceVariableBuilder;
+    instanceVariableBuilder.AddMember(Type::PointerType(addrSize, Type::IntegerType(4, false)), "offset");
+    instanceVariableBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
+    instanceVariableBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "type");
+    instanceVariableBuilder.AddMember(Type::IntegerType(4, false), "alignment");
+    instanceVariableBuilder.AddMember(Type::IntegerType(4, false), "size");
+    type = finalizeStructureBuilder(bv, instanceVariableBuilder, CustomTypes::InterfaceVariable);
 
-    StructureBuilder ivarList;
-    ivarList.AddMember(Type::IntegerType(4, false), "entsize");
-    ivarList.AddMember(Type::IntegerType(4, false), "count");
-    type = finalizeStructureBuilder(bv, ivarList, "objc_ivar_list_t");
+    StructureBuilder instanceVariableListBuilder;
+    instanceVariableListBuilder.AddMember(Type::IntegerType(4, false), "entsize");
+    instanceVariableListBuilder.AddMember(Type::IntegerType(4, false), "count");
+    type = finalizeStructureBuilder(bv, instanceVariableListBuilder, CustomTypes::InterfaceVariableList);
 
 }
 
