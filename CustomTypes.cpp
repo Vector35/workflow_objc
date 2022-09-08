@@ -41,8 +41,11 @@ void defineAll(Ref<BinaryView> bv)
     int addrSize = bv->GetAddressSize();
 
     auto type = defineTypedef(bv, {CustomTypes::FastPointer}, Type::PointerType(addrSize, Type::VoidType()));
+    auto fastPointerType = type.second;
     type = defineTypedef(bv, {CustomTypes::RelativePointer}, Type::IntegerType(4, true));
+    auto relativePointerType = type.second;
     type = defineTypedef(bv, {CustomTypes::TaggedPointer}, Type::PointerType(addrSize, Type::VoidType()));
+    auto taggedPointerType = type.second;
 
     type = defineTypedef(bv, {CustomTypes::ID}, Type::PointerType(addrSize, Type::VoidType()));
     type = defineTypedef(bv, {CustomTypes::Selector}, Type::PointerType(addrSize, Type::IntegerType(1, false)));
@@ -53,22 +56,22 @@ void defineAll(Ref<BinaryView> bv)
     type = defineTypedef(bv, {CustomTypes::CGFloat}, Type::FloatType(addrSize));
 
     StructureBuilder cfstringStructBuilder;
-    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "isa");
+    cfstringStructBuilder.AddMember(taggedPointerType, "isa");
     cfstringStructBuilder.AddMember(Type::IntegerType(addrSize, false), "flags");
-    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "data");
+    cfstringStructBuilder.AddMember(taggedPointerType, "data");
     cfstringStructBuilder.AddMember(Type::IntegerType(addrSize, false), "size");
     type = finalizeStructureBuilder(bv, cfstringStructBuilder, CustomTypes::CFString);
 
     StructureBuilder methodEntryBuilder;
-    methodEntryBuilder.AddMember(Type::IntegerType(4, true), "name");
-    methodEntryBuilder.AddMember(Type::IntegerType(4, true), "types");
-    methodEntryBuilder.AddMember(Type::IntegerType(4, true), "imp");
+    methodEntryBuilder.AddMember(relativePointerType, "name");
+    methodEntryBuilder.AddMember(relativePointerType, "types");
+    methodEntryBuilder.AddMember(relativePointerType, "imp");
     type = finalizeStructureBuilder(bv, methodEntryBuilder, CustomTypes::MethodListEntry);
 
     StructureBuilder methodBuilder;
-    methodBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
-    methodBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "types");
-    methodBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "imp");
+    methodBuilder.AddMember(taggedPointerType, "name");
+    methodBuilder.AddMember(taggedPointerType, "types");
+    methodBuilder.AddMember(taggedPointerType, "imp");
     type = finalizeStructureBuilder(bv, methodBuilder, CustomTypes::Method);
 
     StructureBuilder methListBuilder;
@@ -82,21 +85,21 @@ void defineAll(Ref<BinaryView> bv)
     classROBuilder.AddMember(Type::IntegerType(4, false), "size");
     if (addrSize == 8)
         classROBuilder.AddMember(Type::IntegerType(4, false), "reserved");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "ivar_layout");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "methods");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "protocols");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "ivars");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "weak_ivar_layout");
-    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "properties");
+    classROBuilder.AddMember(taggedPointerType, "ivar_layout");
+    classROBuilder.AddMember(taggedPointerType, "name");
+    classROBuilder.AddMember(taggedPointerType, "methods");
+    classROBuilder.AddMember(taggedPointerType, "protocols");
+    classROBuilder.AddMember(taggedPointerType, "ivars");
+    classROBuilder.AddMember(taggedPointerType, "weak_ivar_layout");
+    classROBuilder.AddMember(taggedPointerType, "properties");
     type = finalizeStructureBuilder(bv, classROBuilder, CustomTypes::ClassRO);
 
     StructureBuilder classBuilder;
-    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "isa");
-    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "super");
+    classBuilder.AddMember(taggedPointerType, "isa");
+    classBuilder.AddMember(taggedPointerType, "super");
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "cache");
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "vtable");
-    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "data");
+    classBuilder.AddMember(fastPointerType, "data");
     type = finalizeStructureBuilder(bv, classBuilder, CustomTypes::Class);
 
     StructureBuilder instanceVariableBuilder;
