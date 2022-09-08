@@ -195,6 +195,35 @@ void InfoHandler::applyMethodListType(
     }
 }
 
+void InfoHandler::applyPropertyListType(BinaryViewRef bv, const TypeRef& propertyListType,
+    std::size_t& totalProperties, const std::string& base_name,
+    const ObjectiveNinja::PropertyListInfo& pli, const std::string& prefix)
+{
+    if (pli.address && !pli.properties.empty()) {
+        auto propertyType = pli.hasRelativeOffsets()
+            ? bv->GetTypeByName(CustomTypes::PropertyListEntry)
+            : bv->GetTypeByName(CustomTypes::Property);
+
+        // Create a data variable and symbol for the property list header.
+        defineVariable(bv, pli.address, propertyListType);
+        defineSymbol(bv, pli.address, base_name, prefix);
+
+        // Create data variables for each property in the property list.
+        for (const auto& pi : pli.properties) {
+            ++totalProperties;
+
+            defineVariable(bv, pi.address, propertyType);
+            defineSymbol(bv, pi.address, sanitizeSelector(pi.name.referenced), "qt_");
+            defineVariable(bv, pi.attributes.address, stringType(pi.attributes.referenced.size()));
+            defineSymbol(bv, pi.attributes.address, sanitizeSelector(pi.name.referenced), "qa_");
+
+            defineReference(bv, pli.address, pi.address);
+            defineReference(bv, pi.address, pi.name.address);
+            defineReference(bv, pi.address, pi.attributes.address);
+        }
+    }
+}
+
 void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
 {
     auto start = Performance::now();
@@ -208,6 +237,7 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     auto classType = namedType(bv, CustomTypes::Class);
     auto classDataType = namedType(bv, CustomTypes::ClassRO);
     auto methodListType = namedType(bv, CustomTypes::MethodList);
+    auto propertyListType = namedType(bv, CustomTypes::PropertyList);
 
     // Create data variables and symbols for all CFString instances.
     for (const auto& csi : info->cfStrings) {
@@ -236,6 +266,7 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     }
 
     auto totalMethods = std::size_t {0};
+    auto totalProperties = std::size_t {0};
 
     std::map<ObjectiveNinja::Address, std::string> addressToClassMap;
 
@@ -267,9 +298,15 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
         if (ci.methodList.address) {
             defineReference(bv, ci.data.address, ci.methodList.address);
         }
+        if (ci.propertyList.address) {
+            defineReference(bv, ci.data.address, ci.propertyList.address);
+        }
 
         applyMethodListType(info, bv, taggedPointerType, methodListType,
             totalMethods, ci.name.referenced, ci.methodList.referenced, "ml_");
+
+        applyPropertyListType(bv, propertyListType, totalProperties,
+            ci.name.referenced, ci.propertyList.referenced, "ql_");
     }
 
     for (const auto classRef : info->classRefs) {
@@ -299,8 +336,8 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
 
     const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
     log->LogInfo("Analysis results applied in %lu ms", elapsed.count());
-    log->LogInfo("Found %d classes, %d methods, %d selector references",
-        info->classes.size(), totalMethods, info->selectorRefs.size());
+    log->LogInfo("Found %d classes, %d methods, %d selector references, %d properties",
+        info->classes.size(), totalMethods, info->selectorRefs.size(), totalProperties);
     log->LogInfo("Found %d CFString instances", info->cfStrings.size());
     log->LogInfo("Found %d class references", info->classRefs.size());
     log->LogInfo("Found %d super-class references", info->superClassRefs.size());

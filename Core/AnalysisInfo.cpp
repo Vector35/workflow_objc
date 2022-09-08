@@ -40,6 +40,11 @@ bool MethodListInfo::hasDirectSelectors() const
     return flags & 0x4000;
 }
 
+bool PropertyListInfo::hasRelativeOffsets() const
+{
+    return flags & 0x8000;
+}
+
 std::string AnalysisInfo::dump() const
 {
     return "<unimplemented>";

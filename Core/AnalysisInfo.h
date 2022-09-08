@@ -139,12 +139,35 @@ struct MethodListInfo : AddressInfo {
 };
 
 /**
+ * A description of an Objective-C property.
+ */
+struct PropertyInfo : AddressInfo {
+    RefInfo<std::string> name;
+    RefInfo<std::string> attributes;
+};
+
+/**
+ * A description of an Objective-C property list.
+ */
+struct PropertyListInfo : AddressInfo {
+    uint16_t entsize {};
+    uint16_t flags {};
+    std::vector<PropertyInfo> properties {};
+
+    /**
+     * Tells whether the method list uses relative offsets or not.
+     */
+    bool hasRelativeOffsets() const;
+};
+
+/**
  * A description of an Objective-C class.
  */
 struct ClassInfo : AddressInfo {
     RefInfo<std::string> name {};
     AddressInfo data {};
     RefInfo<MethodListInfo> methodList {};
+    RefInfo<PropertyListInfo> propertyList {};
 };
 
 /**

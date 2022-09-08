@@ -35,6 +35,9 @@ const std::string InterfaceVariableList = "objc_ivar_t";
 const std::string Method = "objc_method_t";
 const std::string MethodList = "objc_method_list_t";
 const std::string MethodListEntry = "objc_method_entry_t";
+const std::string Property = "objc_property_t";
+const std::string PropertyList = "objc_property_list_t";
+const std::string PropertyListEntry = "objc_property_entry_t";
 
 /**
  * Define all Objective-C-related types for a view.

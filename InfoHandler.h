@@ -78,6 +78,13 @@ class InfoHandler {
         std::size_t&, const std::string& base_name,
         const ObjectiveNinja::MethodListInfo&, const std::string&);
 
+    /**
+     * Create data variables and symbols for a property.
+     */
+    static void applyPropertyListType(BinaryViewRef, const TypeRef&,
+        std::size_t&, const std::string& base_name,
+        const ObjectiveNinja::PropertyListInfo&, const std::string&);
+
 public:
     /**
      * Apply AnalysisInfo to a BinaryView.

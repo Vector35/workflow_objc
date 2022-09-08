@@ -80,6 +80,22 @@ void defineAll(Ref<BinaryView> bv)
     methListBuilder.AddMember(Type::IntegerType(4, false), "count");
     type = finalizeStructureBuilder(bv, methListBuilder, CustomTypes::MethodList);
 
+    StructureBuilder propertyListEntryBuilder;
+    propertyListEntryBuilder.AddMember(relativePointerType, "name");
+    propertyListEntryBuilder.AddMember(relativePointerType, "attributes");
+    type = finalizeStructureBuilder(bv, propertyListEntryBuilder, CustomTypes::PropertyListEntry);
+
+    StructureBuilder propertyBuilder;
+    propertyBuilder.AddMember(taggedPointerType, "name");
+    propertyBuilder.AddMember(taggedPointerType, "attributes");
+    type = finalizeStructureBuilder(bv, propertyBuilder, CustomTypes::Property);
+
+    StructureBuilder propertyListBuilder;
+    propertyListBuilder.AddMember(Type::IntegerType(2, false), "entsize");
+    propertyListBuilder.AddMember(Type::IntegerType(2, false), "flags");
+    propertyListBuilder.AddMember(Type::IntegerType(4, false), "count");
+    type = finalizeStructureBuilder(bv, propertyListBuilder, CustomTypes::PropertyList);
+
     StructureBuilder classROBuilder;
     classROBuilder.AddMember(Type::IntegerType(4, false), "flags");
     classROBuilder.AddMember(Type::IntegerType(4, false), "start");
