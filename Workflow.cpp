@@ -15,6 +15,7 @@
 
 #include "Core/AnalysisProvider.h"
 #include "Core/BinaryViewFile.h"
+#include "Core/ExceptionUtils.h"
 
 #include <lowlevelilinstruction.h>
 
@@ -201,6 +202,7 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
                 }
             } catch (...) {
                 log->LogError("Structure analysis failed; binary may be malformed.");
+                ObjectiveNinja::ExceptionUtils::forCurrentNested(ObjectiveNinja::ExceptionUtils::logDebugAction(*log, 1));
                 log->LogError("Objective-C analysis will not be applied due to previous errors.");
             }
 

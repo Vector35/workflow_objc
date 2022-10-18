@@ -16,7 +16,11 @@
 #include <algorithm>
 #include <cinttypes>
 #include <cstddef>
+#include <exception>
+#include <iomanip>
+#include <ios>
 #include <regex>
+#include <sstream>
 
 using namespace BinaryNinja;
 
@@ -73,7 +77,7 @@ void InfoHandler::defineReference(BinaryViewRef bv, ObjectiveNinja::Address from
 }
 
 void InfoHandler::applyMethodType(BinaryViewRef bv, const std::string& base_name,
-    const ObjectiveNinja::MethodInfo& mi)
+    const ObjectiveNinja::MethodInfo& mi) try
 {
     auto selectorTokens = mi.selectorTokens();
     auto typeTokens = mi.decodedTypeTokens();
@@ -142,13 +146,17 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const std::string& base_name
     // right now, only instance methods are analyzed and we can just use '-'.
     auto name = "-[" + base_name + " " + mi.selectorName.referenced + "]";
     defineSymbol(bv, mi.impl.address, name, "", FunctionSymbol);
+} catch (...) {
+    auto msg = std::ostringstream("InfoHandler::applyMethodType(bv, ", std::ios_base::app);
+    msg << std::quoted(base_name) << ", mi) failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
 void InfoHandler::applyMethodListType(
     SharedAnalysisInfo info, BinaryViewRef bv,
     const TypeRef &taggedPointerType, const TypeRef &methodListType,
     std::size_t &totalMethods, const std::string& base_name,
-    const ObjectiveNinja::MethodListInfo& mli, const std::string& prefix)
+    const ObjectiveNinja::MethodListInfo& mli, const std::string& prefix) try
 {
     if (mli.address && !mli.methods.empty()) {
         auto methodType = mli.hasRelativeOffsets()
@@ -195,11 +203,18 @@ void InfoHandler::applyMethodListType(
             applyMethodType(bv, base_name, mi);
         }
     }
+} catch (...) {
+    auto msg = std::ostringstream(
+        "InfoHandler::applyMethodListType(info, bv, taggedPointerType, methodListType, ",
+        std::ios_base::app);
+    msg << std::dec << totalMethods << ", " << std::quoted(base_name) << ", mli, "
+        << std::quoted(prefix) << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
 void InfoHandler::applyPropertyListType(BinaryViewRef bv, const TypeRef& propertyListType,
     std::size_t& totalProperties, const std::string& base_name,
-    const ObjectiveNinja::PropertyListInfo& pli, const std::string& prefix)
+    const ObjectiveNinja::PropertyListInfo& pli, const std::string& prefix) try
 {
     if (pli.address && !pli.properties.empty()) {
         auto propertyType = pli.hasRelativeOffsets()
@@ -224,9 +239,15 @@ void InfoHandler::applyPropertyListType(BinaryViewRef bv, const TypeRef& propert
             defineReference(bv, pi.address, pi.attributes.address);
         }
     }
+} catch (...) {
+    auto msg = std::ostringstream("InfoHandler::applyPropertyListType(bv, propertyListType, ",
+        std::ios_base::app);
+    msg << std::dec << totalProperties << ", " << std::quoted(base_name) << ", pli, "
+        << std::quoted(prefix) << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
+void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv) try
 {
     auto start = Performance::now();
 
@@ -490,4 +511,6 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     log->LogInfo("Found %d CFString instances", info->cfStrings.size());
     log->LogInfo("Found %d class references", info->classRefs.size());
     log->LogInfo("Found %d super-class references", info->superClassRefs.size());
+} catch (...) {
+    std::throw_with_nested(std::runtime_error("InfoHandler::applyInfoToView(info, bv) failed"));
 }

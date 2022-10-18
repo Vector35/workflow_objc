@@ -1,8 +1,13 @@
 #include "SuperClassRefAnalyzer.h"
 
 #include "../../Constants.h"
+#include "../ExceptionUtils.h"
 
 #include <binaryninjaapi.h>
+
+#include <exception>
+#include <ios>
+#include <sstream>
 
 using namespace ObjectiveNinja;
 
@@ -11,12 +16,16 @@ SuperClassRefAnalyzer::SuperClassRefAnalyzer(SharedAnalysisInfo info, SharedAbst
 {
 }
 
-AddressRefInfo SuperClassRefAnalyzer::analyzeSuperClassRef(Address address)
+AddressRefInfo SuperClassRefAnalyzer::analyzeSuperClassRef(Address address) try
 {
     return {address, m_file->readLong(address)};
+} catch (...) {
+    auto msg = std::ostringstream("SuperClassRefAnalyzer::analyzeSuperClassRef(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-void SuperClassRefAnalyzer::run()
+void SuperClassRefAnalyzer::run() try
 {
     const auto sectionStart = m_file->sectionStart("__objc_superrefs");
     const auto sectionEnd = m_file->sectionEnd("__objc_superrefs");
@@ -31,6 +40,9 @@ void SuperClassRefAnalyzer::run()
             m_info->superClassRefs.emplace_back(analyzeSuperClassRef(address));
         } catch (...) {
             log->LogWarn("Super-class ref analysis at %#x failed; skipping.", address);
+            ExceptionUtils::forCurrentNested(ExceptionUtils::logDebugAction(*log, 1));
         }
     }
+} catch (...) {
+    std::throw_with_nested(std::runtime_error("SuperClassRefAnalyzer::run() failed"));
 }

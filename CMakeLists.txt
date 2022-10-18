@@ -12,6 +12,7 @@ endif()
 # Core library -----------------------------------------------------------------
 
 set(CORE_SOURCE
+  Core/ExceptionUtils.h
   Core/Analyzers/CFStringAnalyzer.h
   Core/Analyzers/ClassAnalyzer.h
   Core/Analyzers/ClassRefAnalyzer.h
@@ -31,6 +32,7 @@ set(CORE_SOURCE
   Core/Analyzers/ProtocolAnalyzer.cpp
   Core/Analyzers/SelectorAnalyzer.cpp
   Core/Analyzers/SuperClassRefAnalyzer.cpp
+  Core/ExceptionUtils.cpp
   Core/BinaryViewFile.cpp
   Core/ABI.cpp
   Core/AbstractFile.cpp

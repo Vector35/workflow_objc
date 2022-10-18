@@ -15,6 +15,7 @@
 
 #include "Core/AnalysisProvider.h"
 #include "Core/BinaryViewFile.h"
+#include "Core/ExceptionUtils.h"
 
 void Commands::defineTypes(BinaryViewRef bv)
 {
@@ -53,6 +54,8 @@ void Commands::analyzeStructures(BinaryViewRef bv)
     } catch (...) {
         const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
         log->LogError("Structure analysis failed; binary may be malformed.");
+        ObjectiveNinja::ExceptionUtils::forCurrentNested(
+            ObjectiveNinja::ExceptionUtils::logDebugAction(*log, 1));
         log->LogError("Objective-C analysis will not be applied due to previous errors.");
     }
 

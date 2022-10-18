@@ -8,11 +8,15 @@
 #include "ProtocolAnalyzer.h"
 
 #include "../../Constants.h"
+#include "../ExceptionUtils.h"
 
 #include <binaryninjaapi.h>
 
 #include <array>
+#include <exception>
 #include <functional>
+#include <ios>
+#include <sstream>
 
 using namespace ObjectiveNinja;
 
@@ -22,7 +26,7 @@ ProtocolAnalyzer::ProtocolAnalyzer(SharedAnalysisInfo info,
 {
 }
 
-SharedProtocolInfo ProtocolAnalyzer::analyzeProtocol(Address address)
+SharedProtocolInfo ProtocolAnalyzer::analyzeProtocol(Address address) try
 {
     if (m_info->protocolsByKey.count(address)) {
         return m_info->protocolsByKey[address];
@@ -83,9 +87,13 @@ SharedProtocolInfo ProtocolAnalyzer::analyzeProtocol(Address address)
     m_info->protocolsByKey[pi->address] = pi;
 
     return pi;
+} catch (...) {
+    auto msg = std::ostringstream("ProtocolAnalyzer::analyzeProtocol(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-ProtocolListInfo ProtocolAnalyzer::analyzeProtocolList(Address address)
+ProtocolListInfo ProtocolAnalyzer::analyzeProtocolList(Address address) try
 {
     ProtocolListInfo pli;
     pli.address = address;
@@ -101,9 +109,14 @@ ProtocolListInfo ProtocolAnalyzer::analyzeProtocolList(Address address)
     }
 
     return pli;
+} catch (...) {
+    auto msg = std::ostringstream("ProtocolAnalyzer::analyzeProtocolList(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-PropertyListInfo ProtocolAnalyzer::analyzePropertyList(Address address) {
+PropertyListInfo ProtocolAnalyzer::analyzePropertyList(Address address) try
+{
     PropertyListInfo pli;
     pli.address = address;
     pli.entsize = m_file->readShort(pli.address);
@@ -135,9 +148,13 @@ PropertyListInfo ProtocolAnalyzer::analyzePropertyList(Address address) {
     }
 
     return pli;
+} catch (...) {
+    auto msg = std::ostringstream("ProtocolAnalyzer::analyzePropertyList(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-void ProtocolAnalyzer::run()
+void ProtocolAnalyzer::run() try
 {
     const auto sectionStart = m_file->sectionStart("__objc_protolist");
     const auto sectionEnd = m_file->sectionEnd("__objc_protolist");
@@ -153,9 +170,13 @@ void ProtocolAnalyzer::run()
                 m_info->protocols.emplace_back(address, analyzeProtocol(protocolAddress));
             } catch (...) {
                 log->LogWarn("Protocol analysis at %#x (%#x) failed; skipping.", address, protocolAddress);
+                ExceptionUtils::forCurrentNested(ExceptionUtils::logDebugAction(*log, 1));
             }
         } catch (...) {
             log->LogWarn("Protocol analysis at %#x failed; skipping.", address);
+            ExceptionUtils::forCurrentNested(ExceptionUtils::logDebugAction(*log, 1));
         }
     }
+} catch (...) {
+    std::throw_with_nested(std::runtime_error("ProtocolAnalyzer::run() failed"));
 }

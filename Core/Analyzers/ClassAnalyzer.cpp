@@ -8,11 +8,15 @@
 #include "ClassAnalyzer.h"
 
 #include "../../Constants.h"
+#include "../ExceptionUtils.h"
 
 #include <binaryninjaapi.h>
 
 #include <array>
+#include <exception>
 #include <functional>
+#include <ios>
+#include <sstream>
 
 using namespace ObjectiveNinja;
 
@@ -22,7 +26,7 @@ ClassAnalyzer::ClassAnalyzer(SharedAnalysisInfo info,
 {
 }
 
-ClassInfo ClassAnalyzer::analyzeClass(Address address)
+ClassInfo ClassAnalyzer::analyzeClass(Address address) try
 {
     auto ci = ClassInfo {};
     ci.address = address;
@@ -49,9 +53,13 @@ ClassInfo ClassAnalyzer::analyzeClass(Address address)
     //     ci.propertyList.referenced = analyzePropertyList(ci.propertyList.address);
 
     return ci;
+} catch (...) {
+    auto msg = std::ostringstream("ClassAnalyzer::analyzeClass(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-MethodInfo ClassAnalyzer::analyzeMethod(Address address, bool hasRelativeOffsets, bool hasDirectSelectors)
+MethodInfo ClassAnalyzer::analyzeMethod(Address address, bool hasRelativeOffsets, bool hasDirectSelectors) try
 {
     auto mi = MethodInfo {};
     mi.address = address;
@@ -80,9 +88,14 @@ MethodInfo ClassAnalyzer::analyzeMethod(Address address, bool hasRelativeOffsets
     m_info->methodImpls[mi.selectorName.address] = mi.impl;
 
     return mi;
+} catch (...) {
+    auto msg = std::ostringstream("ClassAnalyzer::analyzeMethod(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ", "
+        << std::boolalpha << hasRelativeOffsets << ", " << hasDirectSelectors << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-MethodListInfo ClassAnalyzer::analyzeMethodList(Address address)
+MethodListInfo ClassAnalyzer::analyzeMethodList(Address address) try
 {
     auto mli = MethodListInfo {};
     mli.address = address;
@@ -98,9 +111,13 @@ MethodListInfo ClassAnalyzer::analyzeMethodList(Address address)
     }
 
     return mli;
+} catch (...) {
+    auto msg = std::ostringstream("ClassAnalyzer::analyzeMethodList(", std::ios_base::app);
+    msg << std::hex << std::showbase << address << ") failed";
+    std::throw_with_nested(std::runtime_error(msg.str()));
 }
 
-void ClassAnalyzer::run()
+void ClassAnalyzer::run() try
 {
     const auto sectionStart = m_file->sectionStart("__objc_classlist");
     const auto sectionEnd = m_file->sectionEnd("__objc_classlist");
@@ -116,9 +133,13 @@ void ClassAnalyzer::run()
                 m_info->classes.emplace_back(address, analyzeClass(classAddress));
             } catch (...) {
                 log->LogWarn("Class analysis at %#x (%#x) failed; skipping.", address, classAddress);
+                ExceptionUtils::forCurrentNested(ExceptionUtils::logDebugAction(*log, 1));
             }
         } catch (...) {
             log->LogWarn("Class analysis at %#x failed; skipping.", address);
+            ExceptionUtils::forCurrentNested(ExceptionUtils::logDebugAction(*log, 1));
         }
     }
+} catch (...) {
+    std::throw_with_nested(std::runtime_error("ClassAnalyzer::run() failed"));
 }

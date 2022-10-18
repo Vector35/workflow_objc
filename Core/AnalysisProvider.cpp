@@ -14,9 +14,11 @@
 #include "Analyzers/SelectorAnalyzer.h"
 #include "Analyzers/SuperClassRefAnalyzer.h"
 
+#include <exception>
+
 namespace ObjectiveNinja {
 
-SharedAnalysisInfo AnalysisProvider::infoForFile(SharedAbstractFile file)
+SharedAnalysisInfo AnalysisProvider::infoForFile(SharedAbstractFile file) try
 {
     auto info = std::make_shared<ObjectiveNinja::AnalysisInfo>();
 
@@ -32,6 +34,8 @@ SharedAnalysisInfo AnalysisProvider::infoForFile(SharedAbstractFile file)
         analyzer->run();
 
     return info;
+} catch (...) {
+    std::throw_with_nested(std::runtime_error("AnalysisProvider::infoForFile(file) failed"));
 }
 
 }
