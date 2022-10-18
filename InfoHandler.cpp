@@ -11,6 +11,8 @@
 #include "CustomTypes.h"
 #include "Performance.h"
 
+#include <binaryninjaapi.h>
+
 #include <algorithm>
 #include <cinttypes>
 #include <cstddef>
@@ -241,30 +243,42 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     auto protocolType = namedType(bv, CustomTypes::Protocol);
     auto propertyListType = namedType(bv, CustomTypes::PropertyList);
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     // Create data variables and symbols for all CFString instances.
     for (const auto& csi : info->cfStrings) {
-        reader.Seek(csi.data.address);
-        auto text = reader.ReadString(csi.size + 1);
-        auto sanitizedText = sanitizeText(text);
+        try {
+            reader.Seek(csi.data.address);
+            auto text = reader.ReadString(csi.size + 1);
+            auto sanitizedText = sanitizeText(text);
 
-        defineVariable(bv, csi.address, cfStringType);
-        defineVariable(bv, csi.data.address, stringType(csi.size));
-        defineSymbol(bv, csi.address, sanitizedText, "cf_");
-        defineSymbol(bv, csi.data.address, sanitizedText, "as_");
+            defineVariable(bv, csi.address, cfStringType);
+            defineVariable(bv, csi.data.address, stringType(csi.size));
+            defineSymbol(bv, csi.address, sanitizedText, "cf_");
+            defineSymbol(bv, csi.data.address, sanitizedText, "as_");
 
-        defineReference(bv, csi.address, csi.data.address);
+            defineReference(bv, csi.address, csi.data.address);
+        } catch (...) {
+            log->LogWarn("CFString definition at %#x (%#x) failed; skipping.",
+                csi.address, csi.data.address);
+        }
     }
 
     // Create data variables and symbols for selectors and selector references.
     for (const auto& sr : info->selectorRefs) {
-        auto sanitizedSelector = sanitizeSelector(sr->referenced.resolved.referenced);
+        try {
+            auto sanitizedSelector = sanitizeSelector(sr->referenced.resolved.referenced);
 
-        defineVariable(bv, sr->address, taggedPointerType);
-        defineVariable(bv, sr->referenced.resolved.address, stringType(sr->referenced.resolved.referenced.size()));
-        defineSymbol(bv, sr->address, sanitizedSelector, "stp_");
-        defineSymbol(bv, sr->referenced.resolved.address, sanitizedSelector, "sn_");
+            defineVariable(bv, sr->address, taggedPointerType);
+            defineVariable(bv, sr->referenced.resolved.address, stringType(sr->referenced.resolved.referenced.size()));
+            defineSymbol(bv, sr->address, sanitizedSelector, "stp_");
+            defineSymbol(bv, sr->referenced.resolved.address, sanitizedSelector, "sn_");
 
-        defineReference(bv, sr->address, sr->referenced.resolved.address);
+            defineReference(bv, sr->address, sr->referenced.resolved.address);
+        } catch (...) {
+            log->LogWarn("Selector definition at %#x (%#x) failed; skipping.",
+                sr->address, sr->referenced.resolved.address);
+        }
     }
 
     auto totalMethods = std::size_t {0};
@@ -273,96 +287,101 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     // Create data variables and symbols for the analyzed protocols.
     for (const auto& pir : info->protocols) {
         const auto& pi = pir.referenced;
-        if (pir.address) {
-            defineVariable(bv, pir.address, taggedPointerType);
-            defineSymbol(bv, pir.address, pi->name.referenced, "ptp_");
-            defineReference(bv, pir.address, pi->address);
-        }
-
-        defineVariable(bv, pi->address, protocolType);
-        defineSymbol(bv, pi->address, pi->name.referenced, "pt_");
-
-        if (pi->isa.address) {
-            defineSymbol(bv, pi->isa.address, pi->name.referenced, "pi_");
-            defineReference(bv, pi->address, pi->isa.address);
-        }
-        if (pi->name.address) {
-            defineVariable(bv, pi->name.address, stringType(pi->name.referenced.size()));
-            defineSymbol(bv, pi->name.address, pi->name.referenced, "pn_");
-            defineReference(bv, pi->address, pi->name.address);
-        }
-        if (pi->protocolList.address) {
-            defineSymbol(bv, pi->protocolList.address, pi->name.referenced, "pl_");
-            defineReference(bv, pi->address, pi->protocolList.address);
-        }
-        if (pi->instanceMethodList.address) {
-            defineSymbol(bv, pi->instanceMethodList.address, pi->name.referenced, "iml_");
-            defineReference(bv, pi->address, pi->instanceMethodList.address);
-        }
-        if (pi->classMethodList.address) {
-            defineSymbol(bv, pi->classMethodList.address, pi->name.referenced, "cml_");
-            defineReference(bv, pi->address, pi->classMethodList.address);
-        }
-        if (pi->optionalInstanceMethodList.address) {
-            defineSymbol(bv, pi->optionalInstanceMethodList.address, pi->name.referenced, "oiml_");
-            defineReference(bv, pi->address, pi->optionalInstanceMethodList.address);
-        }
-        if (pi->optionalClassMethodList.address) {
-            defineSymbol(bv, pi->optionalClassMethodList.address, pi->name.referenced, "ocml_");
-            defineReference(bv, pi->address, pi->optionalClassMethodList.address);
-        }
-        if (pi->propertyList.address) {
-            defineSymbol(bv, pi->propertyList.address, pi->name.referenced, "ql_");
-            defineReference(bv, pi->address, pi->propertyList.address);
-        }
-        if (pi->extendedMethodTypeList.address) {
-            auto extendedMethodTypeListSize =
-                pi->instanceMethodList.referenced.methods.size() +
-                pi->classMethodList.referenced.methods.size() +
-                pi->optionalInstanceMethodList.referenced.methods.size() +
-                pi->optionalClassMethodList.referenced.methods.size();
-            for (auto i = 0; i < extendedMethodTypeListSize; ++i) {
-                auto listAddress = pi->extendedMethodTypeList.address + i * 0x8;
-                defineReference(bv, pi->address, listAddress);
+        try {
+            if (pir.address) {
+                defineVariable(bv, pir.address, taggedPointerType);
+                defineSymbol(bv, pir.address, pi->name.referenced, "ptp_");
+                defineReference(bv, pir.address, pi->address);
             }
-        }
-        if (pi->demangledName.address) {
-            defineVariable(bv, pi->demangledName.address, stringType(pi->name.referenced.size()));
-            defineSymbol(bv, pi->demangledName.address, pi->name.referenced, "pdn_");
-            defineReference(bv, pi->address, pi->demangledName.address);
-        }
-        if (pi->classPropertyList.address) {
-            defineSymbol(bv, pi->classPropertyList.address, pi->name.referenced, "cql_");
-            defineReference(bv, pi->address, pi->classPropertyList.address);
-        }
 
-        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
-            pi->name.referenced, pi->instanceMethodList.referenced, "iml_");
-        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
-            pi->name.referenced, pi->classMethodList.referenced, "cml_");
-        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
-            pi->name.referenced, pi->optionalInstanceMethodList.referenced, "oiml_");
-        applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
-            pi->name.referenced, pi->optionalClassMethodList.referenced, "ocml_");
+            defineVariable(bv, pi->address, protocolType);
+            defineSymbol(bv, pi->address, pi->name.referenced, "pt_");
 
-        if (pi->protocolList.address && !pi->protocolList.referenced.protocols.empty()) {
-            // Create a data variable and symbol for the protocol list header.
-            defineVariable(bv, pi->protocolList.address, protocolListType);
-            defineSymbol(bv, pi->protocolList.address, pi->name.referenced, "pl_");
-
-            // Create data variables for each protocol in the protocol list.
-            for (const auto& pir2 : pi->protocolList.referenced.protocols) {
-                const auto& pi2 = pir2.referenced;
-                defineVariable(bv, pir2.address, taggedPointerType);
-                defineSymbol(bv, pir2.address, pi2->name.referenced, "ptp_");
-
-                defineReference(bv, pi->protocolList.address, pir2.address);
-                defineReference(bv, pir2.address, pi2->address);
+            if (pi->isa.address) {
+                defineSymbol(bv, pi->isa.address, pi->name.referenced, "pi_");
+                defineReference(bv, pi->address, pi->isa.address);
             }
-        }
+            if (pi->name.address) {
+                defineVariable(bv, pi->name.address, stringType(pi->name.referenced.size()));
+                defineSymbol(bv, pi->name.address, pi->name.referenced, "pn_");
+                defineReference(bv, pi->address, pi->name.address);
+            }
+            if (pi->protocolList.address) {
+                defineSymbol(bv, pi->protocolList.address, pi->name.referenced, "pl_");
+                defineReference(bv, pi->address, pi->protocolList.address);
+            }
+            if (pi->instanceMethodList.address) {
+                defineSymbol(bv, pi->instanceMethodList.address, pi->name.referenced, "iml_");
+                defineReference(bv, pi->address, pi->instanceMethodList.address);
+            }
+            if (pi->classMethodList.address) {
+                defineSymbol(bv, pi->classMethodList.address, pi->name.referenced, "cml_");
+                defineReference(bv, pi->address, pi->classMethodList.address);
+            }
+            if (pi->optionalInstanceMethodList.address) {
+                defineSymbol(bv, pi->optionalInstanceMethodList.address, pi->name.referenced, "oiml_");
+                defineReference(bv, pi->address, pi->optionalInstanceMethodList.address);
+            }
+            if (pi->optionalClassMethodList.address) {
+                defineSymbol(bv, pi->optionalClassMethodList.address, pi->name.referenced, "ocml_");
+                defineReference(bv, pi->address, pi->optionalClassMethodList.address);
+            }
+            if (pi->propertyList.address) {
+                defineSymbol(bv, pi->propertyList.address, pi->name.referenced, "ql_");
+                defineReference(bv, pi->address, pi->propertyList.address);
+            }
+            if (pi->extendedMethodTypeList.address) {
+                auto extendedMethodTypeListSize =
+                    pi->instanceMethodList.referenced.methods.size() +
+                    pi->classMethodList.referenced.methods.size() +
+                    pi->optionalInstanceMethodList.referenced.methods.size() +
+                    pi->optionalClassMethodList.referenced.methods.size();
+                for (auto i = 0; i < extendedMethodTypeListSize; ++i) {
+                    auto listAddress = pi->extendedMethodTypeList.address + i * 0x8;
+                    defineReference(bv, pi->address, listAddress);
+                }
+            }
+            if (pi->demangledName.address) {
+                defineVariable(bv, pi->demangledName.address, stringType(pi->name.referenced.size()));
+                defineSymbol(bv, pi->demangledName.address, pi->name.referenced, "pdn_");
+                defineReference(bv, pi->address, pi->demangledName.address);
+            }
+            if (pi->classPropertyList.address) {
+                defineSymbol(bv, pi->classPropertyList.address, pi->name.referenced, "cql_");
+                defineReference(bv, pi->address, pi->classPropertyList.address);
+            }
 
-        applyPropertyListType(bv, propertyListType, totalProperties,
-            pi->name.referenced, pi->propertyList.referenced, "ql_");
+            applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+                pi->name.referenced, pi->instanceMethodList.referenced, "iml_");
+            applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+                pi->name.referenced, pi->classMethodList.referenced, "cml_");
+            applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+                pi->name.referenced, pi->optionalInstanceMethodList.referenced, "oiml_");
+            applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+                pi->name.referenced, pi->optionalClassMethodList.referenced, "ocml_");
+
+            if (pi->protocolList.address && !pi->protocolList.referenced.protocols.empty()) {
+                // Create a data variable and symbol for the protocol list header.
+                defineVariable(bv, pi->protocolList.address, protocolListType);
+                defineSymbol(bv, pi->protocolList.address, pi->name.referenced, "pl_");
+
+                // Create data variables for each protocol in the protocol list.
+                for (const auto& pir2 : pi->protocolList.referenced.protocols) {
+                    const auto& pi2 = pir2.referenced;
+                    defineVariable(bv, pir2.address, taggedPointerType);
+                    defineSymbol(bv, pir2.address, pi2->name.referenced, "ptp_");
+
+                    defineReference(bv, pi->protocolList.address, pir2.address);
+                    defineReference(bv, pir2.address, pi2->address);
+                }
+            }
+
+            applyPropertyListType(bv, propertyListType, totalProperties,
+                pi->name.referenced, pi->propertyList.referenced, "ql_");
+        } catch (...) {
+            log->LogWarn("Protocol definition at %#x (%#x) failed; skipping.",
+                pir.address, pi->address);
+        }
     }
 
     std::map<ObjectiveNinja::Address, std::string> addressToClassMap;
@@ -370,78 +389,93 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     // Create data variables and symbols for the analyzed classes.
     for (const auto& cir : info->classes) {
         const auto& ci = cir.referenced;
-        if (cir.address) {
-            defineVariable(bv, cir.address, taggedPointerType);
-            defineSymbol(bv, cir.address, ci.name.referenced, "ctp_");
-            defineReference(bv, cir.address, ci.address);
-        }
-        defineVariable(bv, ci.address, classType);
-        defineSymbol(bv, ci.address, ci.name.referenced, "ct_");
-        defineVariable(bv, ci.data.address, classDataType);
-        defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
-        defineSymbol(bv, cir.address, ci.name.referenced, "cp_");
-        defineSymbol(bv, ci.address, ci.name.referenced, "cl_");
-        addressToClassMap[ci.address] = ci.name.referenced;
-        defineSymbol(bv, ci.data.address, ci.name.referenced, "cd_");
-        defineSymbol(bv, ci.name.address, ci.name.referenced, "nm_");
-
-        defineReference(bv, cir.address, ci.address);
-        defineReference(bv, ci.address, ci.data.address);
-        if (ci.name.address) {
-            defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
-            defineSymbol(bv, ci.name.address, ci.name.referenced, "cn_");
-            defineReference(bv, ci.data.address, ci.name.address);
-        }
-        if (ci.methodList.address) {
-            defineReference(bv, ci.data.address, ci.methodList.address);
-        }
-        if (ci.protocolList.address) {
-            defineReference(bv, ci.data.address, ci.protocolList.address);
-        }
-        if (ci.propertyList.address) {
-            defineReference(bv, ci.data.address, ci.propertyList.address);
-        }
-
-        applyMethodListType(info, bv, taggedPointerType, methodListType,
-            totalMethods, ci.name.referenced, ci.methodList.referenced, "ml_");
-
-        if (ci.protocolList.address && !ci.protocolList.referenced.protocols.empty()) {
-            // Create a data variable and symbol for the protocol list header.
-            defineVariable(bv, ci.protocolList.address, protocolListType);
-            defineSymbol(bv, ci.protocolList.address, ci.name.referenced, "pl_");
-
-            // Create data variables for each protocol in the protocol list.
-            for (const auto& pir : ci.protocolList.referenced.protocols) {
-                const auto& pi = pir.referenced;
-                defineVariable(bv, pir.address, taggedPointerType);
-                defineSymbol(bv, pir.address, pi->name.referenced, "ptp_");
-
-                defineReference(bv, ci.protocolList.address, pir.address);
-                defineReference(bv, pir.address, pi->address);
+        try {
+            if (cir.address) {
+                defineVariable(bv, cir.address, taggedPointerType);
+                defineSymbol(bv, cir.address, ci.name.referenced, "ctp_");
+                defineReference(bv, cir.address, ci.address);
             }
-        }
+            defineVariable(bv, ci.address, classType);
+            defineSymbol(bv, ci.address, ci.name.referenced, "ct_");
+            defineVariable(bv, ci.data.address, classDataType);
+            defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
+            defineSymbol(bv, cir.address, ci.name.referenced, "cp_");
+            defineSymbol(bv, ci.address, ci.name.referenced, "cl_");
+            addressToClassMap[ci.address] = ci.name.referenced;
+            defineSymbol(bv, ci.data.address, ci.name.referenced, "cd_");
+            defineSymbol(bv, ci.name.address, ci.name.referenced, "nm_");
 
-        applyPropertyListType(bv, propertyListType, totalProperties,
-            ci.name.referenced, ci.propertyList.referenced, "ql_");
+            defineReference(bv, cir.address, ci.address);
+            defineReference(bv, ci.address, ci.data.address);
+            if (ci.name.address) {
+                defineVariable(bv, ci.name.address, stringType(ci.name.referenced.size()));
+                defineSymbol(bv, ci.name.address, ci.name.referenced, "cn_");
+                defineReference(bv, ci.data.address, ci.name.address);
+            }
+            if (ci.methodList.address) {
+                defineReference(bv, ci.data.address, ci.methodList.address);
+            }
+            if (ci.protocolList.address) {
+                defineReference(bv, ci.data.address, ci.protocolList.address);
+            }
+            if (ci.propertyList.address) {
+                defineReference(bv, ci.data.address, ci.propertyList.address);
+            }
+
+            applyMethodListType(info, bv, taggedPointerType, methodListType, totalMethods,
+                ci.name.referenced, ci.methodList.referenced, "ml_");
+
+            if (ci.protocolList.address && !ci.protocolList.referenced.protocols.empty()) {
+                // Create a data variable and symbol for the protocol list header.
+                defineVariable(bv, ci.protocolList.address, protocolListType);
+                defineSymbol(bv, ci.protocolList.address, ci.name.referenced, "pl_");
+
+                // Create data variables for each protocol in the protocol list.
+                for (const auto& pir : ci.protocolList.referenced.protocols) {
+                    const auto& pi = pir.referenced;
+                    defineVariable(bv, pir.address, taggedPointerType);
+                    defineSymbol(bv, pir.address, pi->name.referenced, "ptp_");
+
+                    defineReference(bv, ci.protocolList.address, pir.address);
+                    defineReference(bv, pir.address, pi->address);
+                }
+            }
+
+            applyPropertyListType(bv, propertyListType, totalProperties,
+                ci.name.referenced, ci.propertyList.referenced, "ql_");
+        } catch (...) {
+            log->LogWarn("Class definition at %#x (%#x) failed; skipping.",
+                cir.address, ci.address);
+        }
     }
 
     for (const auto classRef : info->classRefs) {
-        bv->DefineDataVariable(classRef.address, taggedPointerType);
+        try {
+            bv->DefineDataVariable(classRef.address, taggedPointerType);
 
-        if (classRef.referenced.address != 0) {
-            auto localClass = addressToClassMap.find(classRef.referenced.address);
-            if (localClass != addressToClassMap.end())
-                defineSymbol(bv, classRef.address, localClass->second, "cr_");
+            if (classRef.referenced.address != 0) {
+                auto localClass = addressToClassMap.find(classRef.referenced.address);
+                if (localClass != addressToClassMap.end())
+                    defineSymbol(bv, classRef.address, localClass->second, "cr_");
+            }
+        } catch (...) {
+            log->LogWarn("Class ref definition at %#x (%#x) failed; skipping.",
+                classRef.address, classRef.referenced.address);
         }
     }
 
     for (const auto superClassRef : info->superClassRefs) {
-        bv->DefineDataVariable(superClassRef.address, taggedPointerType);
+        try {
+            bv->DefineDataVariable(superClassRef.address, taggedPointerType);
 
-        if (superClassRef.referenced.address != 0) {
-            auto localClass = addressToClassMap.find(superClassRef.referenced.address);
-            if (localClass != addressToClassMap.end())
-                defineSymbol(bv, superClassRef.address, localClass->second, "scr_");
+            if (superClassRef.referenced.address != 0) {
+                auto localClass = addressToClassMap.find(superClassRef.referenced.address);
+                if (localClass != addressToClassMap.end())
+                    defineSymbol(bv, superClassRef.address, localClass->second, "scr_");
+            }
+        } catch (...) {
+            log->LogWarn("Super-class ref definition at %#x (%#x) failed; skipping.",
+                superClassRef.address, superClassRef.referenced.address);
         }
     }
 
@@ -450,7 +484,6 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
 
     auto elapsed = Performance::elapsed<std::chrono::milliseconds>(start);
 
-    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
     log->LogInfo("Analysis results applied in %lu ms", elapsed.count());
     log->LogInfo("Found %d classes, %d protocols, %d methods, %d selector references, %d properties",
         info->classes.size(), info->protocols.size(), totalMethods, info->selectorRefs.size(), totalProperties);

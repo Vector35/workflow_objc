@@ -7,6 +7,10 @@
 
 #include "ClassAnalyzer.h"
 
+#include "../../Constants.h"
+
+#include <binaryninjaapi.h>
+
 #include <array>
 #include <functional>
 
@@ -103,7 +107,18 @@ void ClassAnalyzer::run()
     if (sectionStart == 0 || sectionEnd == 0)
         return;
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     for (auto address = sectionStart; address < sectionEnd; address += 8) {
-        m_info->classes.emplace_back(address, analyzeClass(arp(m_file->readLong(address))));
+        try {
+            auto classAddress = arp(m_file->readLong(address));
+            try {
+                m_info->classes.emplace_back(address, analyzeClass(classAddress));
+            } catch (...) {
+                log->LogWarn("Class analysis at %#x (%#x) failed; skipping.", address, classAddress);
+            }
+        } catch (...) {
+            log->LogWarn("Class analysis at %#x failed; skipping.", address);
+        }
     }
 }

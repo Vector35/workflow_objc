@@ -7,6 +7,10 @@
 
 #include "CFStringAnalyzer.h"
 
+#include "../../Constants.h"
+
+#include <binaryninjaapi.h>
+
 using namespace ObjectiveNinja;
 
 CFStringAnalyzer::CFStringAnalyzer(SharedAnalysisInfo info,
@@ -31,7 +35,13 @@ void CFStringAnalyzer::run()
     if (sectionStart == 0 || sectionEnd == 0)
         return;
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     for (auto address = sectionStart; address < sectionEnd; address += 0x20) {
-        m_info->cfStrings.emplace_back(analyzeCFString(address));
+        try {
+            m_info->cfStrings.emplace_back(analyzeCFString(address));
+        } catch (...) {
+            log->LogWarn("CFString analysis at %#x failed; skipping.", address);
+        }
     }
 }

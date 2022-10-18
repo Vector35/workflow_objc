@@ -1,5 +1,9 @@
 #include "SuperClassRefAnalyzer.h"
 
+#include "../../Constants.h"
+
+#include <binaryninjaapi.h>
+
 using namespace ObjectiveNinja;
 
 SuperClassRefAnalyzer::SuperClassRefAnalyzer(SharedAnalysisInfo info, SharedAbstractFile file)
@@ -19,8 +23,14 @@ void SuperClassRefAnalyzer::run()
     if (sectionStart == 0 || sectionEnd == 0)
         return;
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     // TODO: Dynamic Address size for armv7
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
-        m_info->superClassRefs.emplace_back(analyzeSuperClassRef(address));
+        try {
+            m_info->superClassRefs.emplace_back(analyzeSuperClassRef(address));
+        } catch (...) {
+            log->LogWarn("Super-class ref analysis at %#x failed; skipping.", address);
+        }
     }
 }

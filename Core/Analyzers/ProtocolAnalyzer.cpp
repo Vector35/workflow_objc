@@ -7,6 +7,10 @@
 
 #include "ProtocolAnalyzer.h"
 
+#include "../../Constants.h"
+
+#include <binaryninjaapi.h>
+
 #include <array>
 #include <functional>
 
@@ -140,7 +144,18 @@ void ProtocolAnalyzer::run()
     if (sectionStart == 0 || sectionEnd == 0)
         return;
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     for (auto address = sectionStart; address < sectionEnd; address += 8) {
-        m_info->protocols.emplace_back(address, analyzeProtocol(arp(m_file->readLong(address))));
+        try {
+            auto protocolAddress = arp(m_file->readLong(address));
+            try {
+                m_info->protocols.emplace_back(address, analyzeProtocol(protocolAddress));
+            } catch (...) {
+                log->LogWarn("Protocol analysis at %#x (%#x) failed; skipping.", address, protocolAddress);
+            }
+        } catch (...) {
+            log->LogWarn("Protocol analysis at %#x failed; skipping.", address);
+        }
     }
 }

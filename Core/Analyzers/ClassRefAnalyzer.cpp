@@ -1,5 +1,9 @@
 #include "ClassRefAnalyzer.h"
 
+#include "../../Constants.h"
+
+#include <binaryninjaapi.h>
+
 using namespace ObjectiveNinja;
 
 ClassRefAnalyzer::ClassRefAnalyzer(SharedAnalysisInfo info, SharedAbstractFile file)
@@ -19,8 +23,14 @@ void ClassRefAnalyzer::run()
     if (sectionStart == 0 || sectionEnd == 0)
         return;
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     // TODO: Dynamic Address size for armv7
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
-        m_info->classRefs.emplace_back(analyzeClassRef(address));
+        try {
+            m_info->classRefs.emplace_back(analyzeClassRef(address));
+        } catch (...) {
+            log->LogWarn("Class ref analysis at %#x failed; skipping.", address);
+        }
     }
 }

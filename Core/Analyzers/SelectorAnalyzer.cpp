@@ -7,6 +7,10 @@
 
 #include "SelectorAnalyzer.h"
 
+#include "../../Constants.h"
+
+#include <binaryninjaapi.h>
+
 using namespace ObjectiveNinja;
 
 SelectorAnalyzer::SelectorAnalyzer(SharedAnalysisInfo info,
@@ -27,13 +31,24 @@ void SelectorAnalyzer::run()
     if (sectionStart == 0 || sectionEnd == 0)
         return;
 
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
-        auto unresolvedSelectorNameAddress = m_file->readLong(address);
-        auto sri = std::make_shared<SelectorRefInfo>(address, unresolvedSelectorNameAddress, SelectorAnalyzer::analyzeSelectorName(arp(unresolvedSelectorNameAddress)));
+        try {
+            auto unresolvedSelectorNameAddress = m_file->readLong(address);
+            auto selectorNameAddress = arp(unresolvedSelectorNameAddress);
+            try {
+                auto sri = std::make_shared<SelectorRefInfo>(address, unresolvedSelectorNameAddress, SelectorAnalyzer::analyzeSelectorName(selectorNameAddress));
 
-        m_info->selectorRefs.emplace_back(sri);
+                m_info->selectorRefs.emplace_back(sri);
 
-        m_info->selectorRefsByKey[sri->referenced.unresolvedAddress] = sri;
-        m_info->selectorRefsByKey[sri->address] = sri;
+                m_info->selectorRefsByKey[sri->referenced.unresolvedAddress] = sri;
+                m_info->selectorRefsByKey[sri->address] = sri;
+            } catch (...) {
+                log->LogWarn("Selector analysis at %#x (%#x) failed; skipping.", address, selectorNameAddress);
+            }
+        } catch (...) {
+            log->LogWarn("Selector analysis at %#x failed; skipping.", address);
+        }
     }
 }
