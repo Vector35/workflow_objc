@@ -7,12 +7,12 @@
 
 #include "Workflow.h"
 
+#include "ArchitectureHooks.h"
 #include "Constants.h"
 #include "CustomTypes.h"
 #include "GlobalState.h"
 #include "InfoHandler.h"
 #include "Performance.h"
-#include "ArchitectureHooks.h"
 
 #include "Core/AnalysisProvider.h"
 #include "Core/BinaryViewFile.h"
@@ -88,7 +88,7 @@ void Workflow::rewriteCFString(LLILFunctionRef ssa, size_t insnIndex)
     bv->Read(&dest, stringPointer, bv->GetDefaultArchitecture()->GetAddressSize());
 
     auto targetPointer = llil->ConstPointer(bv->GetAddressSize(), dest, llilInsn);
-    auto cfstrCall = llil->Intrinsic({ BinaryNinja::RegisterOrFlag(0, destRegister) }, CFSTRIntrinsicIndex, {targetPointer}, 0, llilInsn);
+    auto cfstrCall = llil->Intrinsic({ BinaryNinja::RegisterOrFlag(0, destRegister) }, CFSTRIntrinsicIndex, { targetPointer }, 0, llilInsn);
 
     llilInsn.Replace(cfstrCall);
 
@@ -104,6 +104,8 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
 
     if (GlobalState::viewIsIgnored(bv))
         return;
+
+    auto messageHandler = GlobalState::messageHandler(bv);
 
     const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
 
@@ -151,28 +153,27 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
                 InfoHandler::applyInfoToView(info, bv);
 
                 const auto msgSendFunctions = messageHandler->getMessageSendFunctions();
-                for (auto addr : msgSendFunctions)
-                {
+                for (auto addr : msgSendFunctions) {
                     BinaryNinja::QualifiedNameAndType nameAndType;
                     std::string errors;
                     std::set<BinaryNinja::QualifiedName> typesAllowRedefinition;
 
                     // void *
                     auto retType = BinaryNinja::Confidence<BinaryNinja::Ref<BinaryNinja::Type>>(
-                            BinaryNinja::Type::PointerType(bv->GetAddressSize(),BinaryNinja::Type::VoidType(), 
+                        BinaryNinja::Type::PointerType(bv->GetAddressSize(), BinaryNinja::Type::VoidType(),
                             0));
 
                     std::vector<BinaryNinja::FunctionParameter> params;
                     auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
 
-                    params.push_back({"self",
-                        BinaryNinja::Type::NamedType(bv, {"id"}),
+                    params.push_back({ "self",
+                        BinaryNinja::Type::NamedType(bv, { "id" }),
                         true,
-                        BinaryNinja::Variable()});
-                    params.push_back({"sel",
+                        BinaryNinja::Variable() });
+                    params.push_back({ "sel",
                         BinaryNinja::Type::PointerType(bv->GetAddressSize(), BinaryNinja::Type::IntegerType(1, false)),
                         true,
-                        BinaryNinja::Variable()});
+                        BinaryNinja::Variable() });
 
                     auto funcType = BinaryNinja::Type::FunctionType(retType, cc, params, true);
                     bv->DefineDataVariable(addr, BinaryNinja::Type::PointerType(bv->GetDefaultArchitecture(), funcType));
@@ -187,7 +188,6 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
         }
     }
 
-    auto messageHandler = GlobalState::messageHandler(bv);
     if (!messageHandler->hasMessageSendFunctions()) {
         log->LogError("Cannot perform Objective-C IL cleanup; no objc_msgSend candidates found");
         GlobalState::addIgnoredView(bv);
@@ -205,30 +205,40 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
         return;
     }
 
-    const auto rewriteIfEligible = [bv, messageHandler, ssa](size_t insnIndex) {
+    const auto rewriteIfEligible = [bv, llil, messageHandler, ssa](size_t insnIndex) {
         auto insn = ssa->GetInstruction(insnIndex);
 
-        if (insn.operation == LLIL_CALL_SSA)
-        {
+        if (insn.operation == LLIL_CALL_SSA
+            || (insn.operation == LLIL_JUMP && insnIndex == ssa->GetInstructionCount() - 1)
+            || insn.operation == LLIL_TAILCALL_SSA) {
             // Filter out calls that aren't to `objc_msgSend`.
-            auto callExpr = insn.GetDestExpr<LLIL_CALL_SSA>();
-            if (!messageHandler->isMessageSend(callExpr.GetValue().value))
+            auto callExpr = insn.GetDestExpr();
+            if (insn.operation == LLIL_CALL_SSA
+                && messageHandler->isMessageSend(callExpr.GetValue().value)) {
+                auto params = insn.GetParameterExprs();
+                if (params.size() >= 2
+                    && params[0].operation == LLIL_REG_SSA
+                    && params[1].operation == LLIL_REG_SSA)
+                    rewriteMethodCall(ssa, insnIndex);
+            } else if (messageHandler->isARCFunction(callExpr.GetValue().value)) {
+                auto nonSSAIdx = ssa->GetNonSSAInstructionIndex(insnIndex);
+                auto targetInsn = llil->GetInstruction(nonSSAIdx);
+                if (insn.operation == LLIL_CALL_SSA)
+                    targetInsn.Replace(llil->Nop(targetInsn));
+                else // Other two categories. TailCall or Jump that is last instruction (so, tailcall...)
+                {
+                    auto lr = llil->GetArchitecture()->GetLinkRegister();
+                    auto lrInfo = llil->GetArchitecture()->GetRegisterInfo(lr);
+
+                    targetInsn.Replace(llil->Return(llil->Register(lrInfo.size, lr, targetInsn), targetInsn));
+                }
+                llil->GenerateSSAForm();
+                llil->Finalize();
                 return;
-
-            // By convention, the selector is the second argument to `objc_msgSend`,
-            // therefore two parameters are required for a proper rewrite; abort if
-            // this condition is not met.
-            auto params = insn.GetParameterExprs<LLIL_CALL_SSA>();
-            if (params.size() < 2
-                || params[0].operation != LLIL_REG_SSA
-                || params[1].operation != LLIL_REG_SSA)
-                return;
-
-            rewriteMethodCall(ssa, insnIndex);
-
-        }
-        else if (insn.operation == LLIL_SET_REG_SSA)
-        {
+            }
+            if (messageHandler->isFunctionLocatedInStubSection(callExpr.GetValue().value))
+                messageHandler->functionWasAnalyzed(llil->GetFunction()->GetStart());
+        } else if (insn.operation == LLIL_SET_REG_SSA) {
             auto sourceExpr = insn.GetSourceExpr<LLIL_SET_REG_SSA>();
             auto addr = sourceExpr.GetValue().value;
             BinaryNinja::DataVariable var;
