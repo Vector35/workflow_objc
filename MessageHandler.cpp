@@ -14,21 +14,23 @@ const std::set<std::string> arcFunctionNames = {
 MessageHandler::MessageHandler(Ref<BinaryView> data)
     : m_data(data)
 {
+    std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
+
     m_authStubsSection = data->GetSectionByName("__auth_stubs");
     m_stubsSection = data->GetSectionByName("__stubs");
-
-    m_msgSendFunctions = findMsgSendFunctions(data);
-    m_arcFunctions = findARCFunctions(data);
 
     if (!m_authStubsSection && !m_stubsSection)
         m_readyForRealAnalysisPass = true;
     else
         data->RegisterNotification(this);
+
+    m_msgSendFunctions = findMsgSendFunctions(data);
+    m_arcFunctions = findARCFunctions(data);
 }
 
 void MessageHandler::OnSymbolAdded(BinaryNinja::BinaryView* view, BinaryNinja::Symbol* sym)
 {
-    std::unique_lock<std::mutex> lock(m_stubMutex);
+    std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
 
     if (m_readyForRealAnalysisPass)
         return;
@@ -79,7 +81,8 @@ void MessageHandler::OnSymbolAdded(BinaryNinja::BinaryView* view, BinaryNinja::S
 
 std::set<uint64_t> MessageHandler::findMsgSendFunctions(BinaryNinja::Ref<BinaryNinja::BinaryView> data)
 {
-    std::unique_lock<std::mutex> lock(m_stubMutex);
+    std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
+
     std::set<uint64_t> results;
     const auto authGotSection = data->GetSectionByName("__auth_got");
     const auto gotSection = data->GetSectionByName("__got");
@@ -114,7 +117,8 @@ std::set<uint64_t> MessageHandler::findMsgSendFunctions(BinaryNinja::Ref<BinaryN
 
 std::set<uint64_t> MessageHandler::findARCFunctions(BinaryNinja::Ref<BinaryNinja::BinaryView> data)
 {
-    std::unique_lock<std::mutex> lock(m_stubMutex);
+    std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
+
     std::set<uint64_t> results;
     const auto authGotSection = data->GetSectionByName("__auth_got");
     const auto gotSection = data->GetSectionByName("__got");
@@ -156,19 +160,21 @@ std::set<uint64_t> MessageHandler::findARCFunctions(BinaryNinja::Ref<BinaryNinja
 
 void MessageHandler::functionWasAnalyzed(uint64_t addr)
 {
-    if (!m_readyForRealAnalysisPass)
+    if (!m_readyForRealAnalysisPass) {
+        std::unique_lock<std::mutex> lock(m_reAnalysisRequiredFunctionsMutex);
         m_reAnalysisRequiredFunctions.insert(addr);
+    }
 }
 
 bool MessageHandler::isMessageSend(uint64_t functionAddress)
 {
-    std::unique_lock<std::mutex> lock(m_stubMutex);
+    std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
     return m_msgSendFunctions.count(functionAddress);
 }
 
 bool MessageHandler::isARCFunction(uint64_t functionAddress)
 {
-    std::unique_lock<std::mutex> lock(m_stubMutex);
+    std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
     return m_arcFunctions.count(functionAddress);
 }
 

@@ -10,10 +10,11 @@ class MessageHandler : public BinaryNinja::BinaryDataNotification {
     BinaryNinja::Ref<BinaryNinja::Section> m_stubsSection;
 
     bool m_readyForRealAnalysisPass = false;
-    std::mutex m_stubMutex;
+    std::recursive_mutex m_stubMutex;
     std::set<std::string> m_presentRequiredStubs;
     std::set<std::string> m_locatedRequiredStubs;
 
+    std::mutex m_reAnalysisRequiredFunctionsMutex;
     std::set<uint64_t> m_reAnalysisRequiredFunctions;
 
     std::set<uint64_t> m_msgSendFunctions;
