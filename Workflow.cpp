@@ -105,8 +105,6 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
     if (GlobalState::viewIsIgnored(bv))
         return;
 
-    auto messageHandler = GlobalState::messageHandler(bv);
-
     const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
 
     // Ignore the view if it has an unsupported architecture.
@@ -187,6 +185,7 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
             GlobalState::storeAnalysisInfo(bv, info);
         }
     }
+    auto messageHandler = GlobalState::messageHandler(bv);
 
     if (!messageHandler->hasMessageSendFunctions()) {
         log->LogError("Cannot perform Objective-C IL cleanup; no objc_msgSend candidates found");
