@@ -31,6 +31,18 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     Workflow::registerActivities();
     Commands::registerCommands();
 
+    BinaryNinja::Ref<BinaryNinja::Settings> settings = BinaryNinja::Settings::Instance();
+    settings->RegisterGroup("objc", "Objective-C");
+
+    settings->RegisterSetting("objc.cleanupARCCode",
+	R"({
+	"title" : "ARC Cleanup",
+	"type" : "boolean",
+	"default" : true,
+	"description" : "Remove ARC related code, i.e. calls to _objc_release, _objc_retain, and other ARC functions, from ILs"
+	})");
+
+
     std::vector<BinaryNinja::Ref<BinaryNinja::Architecture>> targets = {
         BinaryNinja::Architecture::GetByName("aarch64"),
         BinaryNinja::Architecture::GetByName("x86_64")

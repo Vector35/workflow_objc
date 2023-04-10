@@ -5,6 +5,7 @@
 class MessageHandler : public BinaryNinja::BinaryDataNotification {
 
     BinaryNinja::Ref<BinaryNinja::BinaryView> m_data;
+    bool m_shouldCleanupARCCode;
 
     BinaryNinja::Ref<BinaryNinja::Section> m_authStubsSection;
     BinaryNinja::Ref<BinaryNinja::Section> m_stubsSection;
@@ -31,6 +32,8 @@ public:
     MessageHandler(BinaryNinja::Ref<BinaryNinja::BinaryView> data);
 
     void functionWasAnalyzed(uint64_t addr);
+
+    bool ShouldCleanupARCCode() const { return m_shouldCleanupARCCode; }
 
     std::set<uint64_t> getMessageSendFunctions() const { return m_msgSendFunctions; }
     bool hasMessageSendFunctions() const { return m_msgSendFunctions.size() != 0; }

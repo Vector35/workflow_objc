@@ -219,7 +219,7 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
                     && params[0].operation == LLIL_REG_SSA
                     && params[1].operation == LLIL_REG_SSA)
                     rewriteMethodCall(ssa, insnIndex);
-            } else if (messageHandler->isARCFunction(callExpr.GetValue().value)) {
+            } else if (messageHandler->isARCFunction(callExpr.GetValue().value) && messageHandler->ShouldCleanupARCCode()) {
                 auto nonSSAIdx = ssa->GetNonSSAInstructionIndex(insnIndex);
                 auto targetInsn = llil->GetInstruction(nonSSAIdx);
                 if (insn.operation == LLIL_CALL_SSA)
