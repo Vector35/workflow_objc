@@ -34,12 +34,12 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     BinaryNinja::Ref<BinaryNinja::Settings> settings = BinaryNinja::Settings::Instance();
     settings->RegisterGroup("objc", "Objective-C");
 
-    settings->RegisterSetting("objc.cleanupARCCode",
+    settings->RegisterSetting("workflows.objectiveC.cleanupARCCode",
 	R"({
-	"title" : "ARC Cleanup",
+	"title" : "Hide ARC Calls",
 	"type" : "boolean",
 	"default" : true,
-	"description" : "Remove ARC related code, i.e. calls to _objc_release, _objc_retain, and other ARC functions, from ILs"
+	"description" : "Remove ARC-related code, e.g. calls to _objc_release, _objc_retain, and other ARC functions, in ILs"
 	})");
 
 

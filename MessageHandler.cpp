@@ -14,7 +14,7 @@ const std::set<std::string> arcFunctionNames = {
 MessageHandler::MessageHandler(Ref<BinaryView> data)
     : m_data(data)
 {
-    m_shouldCleanupARCCode = BinaryNinja::Settings::Instance()->Get<bool>("objc.cleanupARCCode");
+    m_shouldCleanupARCCode = BinaryNinja::Settings::Instance()->Get<bool>("workflows.objectiveC.cleanupARCCode");
 
     std::unique_lock<std::recursive_mutex> lock(m_stubMutex);
 
