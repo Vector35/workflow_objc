@@ -19,6 +19,7 @@ endif()
 set(PLUGIN_SOURCE
   Core/Analyzers/CFStringAnalyzer.h
   Core/Analyzers/ClassAnalyzer.h
+  Core/Analyzers/CategoryAnalyzer.h
   Core/Analyzers/SelectorAnalyzer.h
   Core/Analyzers/ClassRefAnalyzer.h
   Core/BinaryViewFile.h
@@ -30,6 +31,7 @@ set(PLUGIN_SOURCE
   Core/TypeParser.h
   Core/Analyzers/CFStringAnalyzer.cpp
   Core/Analyzers/ClassAnalyzer.cpp
+  Core/Analyzers/CategoryAnalyzer.cpp
   Core/Analyzers/SelectorAnalyzer.cpp
   Core/Analyzers/ClassRefAnalyzer.cpp
   Core/BinaryViewFile.cpp

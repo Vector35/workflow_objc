@@ -143,6 +143,84 @@ void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassI
     defineSymbol(bv, mi.implAddress, name, "", FunctionSymbol);
 }
 
+void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::CategoryInfo& ci,
+    const BinaryNinja::QualifiedName& classTypeName, const ObjectiveNinja::MethodInfo& mi, std::string className, bool isClassMethod)
+{
+    auto selectorTokens = mi.selectorTokens();
+    std::vector<ObjectiveNinja::QualifiedNameOrType> typeTokens = mi.decodedTypeTokens();
+
+    // For safety, ensure out-of-bounds indexing is not about to occur. This has
+    // never happened and likely won't ever happen, but crashing the product is
+    // generally undesirable, so it's better to be safe than sorry.
+    if (selectorTokens.size() > typeTokens.size()) {
+        LogWarn("Cannot apply method type to %" PRIx64 " due to selector/type token size mismatch.", mi.implAddress);
+        return;
+    }
+
+    auto typeForQualifiedNameOrType = [bv](ObjectiveNinja::QualifiedNameOrType nameOrType) {
+        Ref<Type> type;
+
+        if (nameOrType.type) {
+            type = nameOrType.type;
+            if (!type)
+                type = Type::PointerType(bv->GetAddressSize(), Type::VoidType());
+
+        } else {
+            type = Type::NamedType(nameOrType.name, Type::PointerType(bv->GetAddressSize(), Type::VoidType()));
+            for (size_t i = nameOrType.ptrCount; i > 0; i--)
+                type = Type::PointerType(8, type);
+        }
+
+        return type;
+    };
+
+    BinaryNinja::QualifiedNameAndType nameAndType;
+    std::set<BinaryNinja::QualifiedName> typesAllowRedefinition;
+
+    auto retType = typeForQualifiedNameOrType(typeTokens[0]);
+
+    std::vector<BinaryNinja::FunctionParameter> params;
+    auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
+    Ref<Type> selfType = classTypeName.IsEmpty()
+        ? BinaryNinja::Type::NamedType(bv, { "id" })
+        : BinaryNinja::Type::NamedType(bv, classTypeName);
+    if (selfType->IsVoid())
+        selfType = Type::PointerType(8, Type::VoidType());
+
+    params.push_back({ "self",
+        selfType,
+        true,
+        BinaryNinja::Variable() });
+
+    params.push_back({ "sel",
+        namedType(bv, "SEL"),
+        true,
+        BinaryNinja::Variable() });
+
+    for (size_t i = 3; i < typeTokens.size(); i++) {
+        std::string suffix;
+
+        params.push_back({ selectorTokens.size() > i - 3 ? selectorTokens[i - 3] : "arg",
+            typeForQualifiedNameOrType(typeTokens[i]),
+            true,
+            BinaryNinja::Variable() });
+    }
+
+    auto funcType = BinaryNinja::Type::FunctionType(retType, cc, params);
+
+    // Search for the method's implementation function; apply the type if found.
+    auto f = bv->GetAnalysisFunction(bv->GetDefaultPlatform(), mi.implAddress);
+    if (f)
+        f->SetUserType(funcType);
+    else
+        BNLogError("Processing Type for function at %llx failed", mi.implAddress);
+
+    std::string prefix = isClassMethod ? "+" : "-";
+
+    auto name = prefix + "[" + className + " (" + ci.name + ") " + mi.selector + "]";
+    defineSymbol(bv, mi.implAddress, name, "", FunctionSymbol);
+}
+
 QualifiedName InfoHandler::createClassType(BinaryViewRef bv, const ObjectiveNinja::ClassInfo& info, const ObjectiveNinja::IvarListInfo& vi)
 {
     StructureBuilder classTypeBuilder;
@@ -188,6 +266,7 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
     auto taggedPointerType = namedType(bv, CustomTypes::TaggedPointer);
     auto cfStringType = namedType(bv, CustomTypes::CFString);
     auto classType = namedType(bv, CustomTypes::Class);
+    auto categoryType = namedType(bv, CustomTypes::Category);
     auto classDataType = namedType(bv, CustomTypes::ClassRO);
     auto methodListType = namedType(bv, CustomTypes::MethodList);
     auto ivarListType = namedType(bv, CustomTypes::IvarList);
@@ -293,6 +372,87 @@ void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
         // Create a data variable and symbol for the method list header.
         defineVariable(bv, ci.methodListAddress, methodListType);
         defineSymbol(bv, ci.methodListAddress, ci.name, "ml_");
+    }
+    for (const auto& catInfo : info->categories)
+    {
+        defineVariable(bv, catInfo.listPointer, taggedPointerType);
+        defineVariable(bv, catInfo.address, categoryType);
+        defineVariable(bv, catInfo.nameAddress, stringType(catInfo.name.size()));
+        defineSymbol(bv, catInfo.listPointer, catInfo.name, "cap_");
+        defineSymbol(bv, catInfo.address, catInfo.name, "ca_");
+        defineSymbol(bv, catInfo.nameAddress, catInfo.name, "nm_");
+
+        defineReference(bv, catInfo.listPointer, catInfo.address);
+        defineReference(bv, catInfo.address, catInfo.nameAddress);
+        defineReference(bv, catInfo.address, catInfo.methodListAddress);
+        defineReference(bv, catInfo.address, catInfo.classMethodListAddress);
+        
+        std::string className;
+        if (catInfo.classPointer)
+            if (const auto& it = addressToClassMap.find(catInfo.classPointer); it != addressToClassMap.end())
+                className = it->second;
+        if (className.empty())
+        {
+            if (auto sym = bv->GetSymbolByAddress(catInfo.classPointerAddress))
+                if (sym->GetType() == ImportedDataSymbol)
+                {
+                    const auto& symbolName = sym->GetFullName();
+                    // 14 == len("_OBJC_CLASS_$_")
+                    if (symbolName.size() > 14 && symbolName.rfind("_OBJC_CLASS_$_", 0) == 0)
+                        className = symbolName.substr(14, symbolName.size()-14);
+                }
+        }
+
+        if (catInfo.methodListAddress != 0 && !catInfo.methodList.methods.empty())
+        {
+            auto methodType = catInfo.methodList.hasRelativeOffsets()
+                  ? bv->GetTypeByName(CustomTypes::MethodListEntry)
+                  : bv->GetTypeByName(CustomTypes::Method);
+
+            // Create data variables for each method in the method list.
+            for (const auto& mi : catInfo.methodList.methods) {
+                ++totalMethods;
+        
+                defineVariable(bv, mi.address, methodType);
+                defineSymbol(bv, mi.address, sanitizeSelector(mi.selector), "mt_");
+                defineVariable(bv, mi.typeAddress, stringType(mi.type.size()));
+        
+                defineReference(bv, catInfo.methodList.address, mi.address);
+                defineReference(bv, mi.address, mi.nameAddress);
+                defineReference(bv, mi.address, mi.typeAddress);
+                defineReference(bv, mi.address, mi.implAddress);
+        
+                applyMethodType(bv, catInfo, QualifiedName(className), mi, className, false);
+            }
+        }
+        if (catInfo.classMethodListAddress != 0 && !catInfo.classMethodList.methods.empty())
+        {
+            auto methodType = catInfo.classMethodList.hasRelativeOffsets()
+                  ? bv->GetTypeByName(CustomTypes::MethodListEntry)
+                  : bv->GetTypeByName(CustomTypes::Method);
+
+            // Create data variables for each method in the method list.
+            for (const auto& mi : catInfo.classMethodList.methods) {
+                ++totalMethods;
+
+                defineVariable(bv, mi.address, methodType);
+                defineSymbol(bv, mi.address, sanitizeSelector(mi.selector), "mt_");
+                defineVariable(bv, mi.typeAddress, stringType(mi.type.size()));
+
+                defineReference(bv, catInfo.classMethodList.address, mi.address);
+                defineReference(bv, mi.address, mi.nameAddress);
+                defineReference(bv, mi.address, mi.typeAddress);
+                defineReference(bv, mi.address, mi.implAddress);
+
+                applyMethodType(bv, catInfo, QualifiedName(className), mi, className, true);
+            }
+        }
+
+        // Create a data variable and symbol for the method list header.
+        defineVariable(bv, catInfo.methodListAddress, methodListType);
+        defineSymbol(bv, catInfo.methodListAddress, catInfo.name, "ml_");
+        defineVariable(bv, catInfo.classMethodListAddress, methodListType);
+        defineSymbol(bv, catInfo.classMethodListAddress, catInfo.name, "cml_");
     }
 
     for (const auto classRef : info->classRefs) {

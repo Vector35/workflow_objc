@@ -9,6 +9,7 @@
 
 #include "Analyzers/CFStringAnalyzer.h"
 #include "Analyzers/ClassAnalyzer.h"
+#include "Analyzers/CategoryAnalyzer.h"
 #include "Analyzers/ClassRefAnalyzer.h"
 #include "Analyzers/SelectorAnalyzer.h"
 
@@ -21,6 +22,7 @@ SharedAnalysisInfo AnalysisProvider::infoForFile(SharedAbstractFile file)
     std::vector<std::unique_ptr<ObjectiveNinja::Analyzer>> analyzers;
     analyzers.emplace_back(new SelectorAnalyzer(info, file));
     analyzers.emplace_back(new ClassAnalyzer(info, file));
+    analyzers.emplace_back(new CategoryAnalyzer(info, file));
     analyzers.emplace_back(new CFStringAnalyzer(info, file));
     analyzers.emplace_back(new ClassRefAnalyzer(info, file));
 

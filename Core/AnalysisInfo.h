@@ -133,6 +133,25 @@ struct ClassInfo {
     uint64_t methodListAddress {};
     uint64_t ivarListAddress {};
 };
+/**
+ * A description of an Objective-C category.
+ */
+struct CategoryInfo {
+    uint64_t address {};
+
+    std::string name {};
+    std::string className {};
+    MethodListInfo methodList {};
+    MethodListInfo classMethodList {};
+
+    uint64_t listPointer {};
+    uint64_t classPointer {};
+    /// Address of the pointer to the class (which may be an ImportedDataSymbol)
+    uint64_t classPointerAddress {};
+    uint64_t nameAddress {};
+    uint64_t methodListAddress {};
+    uint64_t classMethodListAddress {};
+};
 
 struct MetaClassInfo {
     std::string name {};
@@ -161,6 +180,7 @@ struct AnalysisInfo {
     std::unordered_map<uint64_t, SharedSelectorRefInfo> selectorRefsByKey {};
 
     std::vector<ClassInfo> classes {};
+    std::vector<CategoryInfo> categories {};
     std::unordered_map<uint64_t, uint64_t> methodImpls;
 
     std::string dump() const;

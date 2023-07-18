@@ -98,6 +98,15 @@ void defineAll(Ref<BinaryView> bv)
     classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "data");
     type = finalizeStructureBuilder(bv, classBuilder, "objc_class_t");
 
+    StructureBuilder categoryBuilder;
+    categoryBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "category_name");
+    categoryBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "class");
+    categoryBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "inst_methods");
+    categoryBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "class_methods");
+    categoryBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "protocols");
+    categoryBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "properties");
+    type = finalizeStructureBuilder(bv, categoryBuilder, "objc_category_t");
+
     StructureBuilder ivarBuilder;
     ivarBuilder.AddMember(Type::PointerType(addrSize, Type::IntegerType(4, false)), "offset");
     ivarBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");

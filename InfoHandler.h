@@ -65,6 +65,8 @@ class InfoHandler {
      */
     static void applyMethodType(BinaryViewRef, const ObjectiveNinja::ClassInfo&,
         const BinaryNinja::QualifiedName& classTypeName, const ObjectiveNinja::MethodInfo&);
+    static void applyMethodType(BinaryViewRef, const ObjectiveNinja::CategoryInfo&,
+        const BinaryNinja::QualifiedName& classTypeName, const ObjectiveNinja::MethodInfo&, std::string, bool);
 
     static BinaryNinja::QualifiedName createClassType(BinaryViewRef,
         const ObjectiveNinja::ClassInfo&, const ObjectiveNinja::IvarListInfo&);
