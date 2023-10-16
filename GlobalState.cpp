@@ -10,8 +10,8 @@
 #include <set>
 #include <unordered_map>
 
-static std::unordered_map<BinaryViewID, SharedAnalysisInfo> g_analysisRecords;
 static std::unordered_map<BinaryViewID, MessageHandler*> g_messageHandlers;
+static std::unordered_map<BinaryViewID, SharedAnalysisInfo> g_viewInfos;
 static std::set<BinaryViewID> g_ignoredViews;
 
 MessageHandler* GlobalState::messageHandler(BinaryViewRef bv)
@@ -30,24 +30,6 @@ BinaryViewID GlobalState::id(BinaryViewRef bv)
     return bv->GetFile()->GetSessionId();
 }
 
-void GlobalState::storeAnalysisInfo(BinaryViewRef bv, SharedAnalysisInfo records)
-{
-    g_analysisRecords[id(std::move(bv))] = std::move(records);
-}
-
-SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef bv)
-{
-    if (hasAnalysisInfo(bv))
-        return g_analysisRecords[id(bv)];
-
-    return nullptr;
-}
-
-bool GlobalState::hasAnalysisInfo(BinaryViewRef bv)
-{
-    return g_analysisRecords.count(id(std::move(bv))) > 0;
-}
-
 void GlobalState::addIgnoredView(BinaryViewRef bv)
 {
     g_ignoredViews.insert(id(std::move(bv)));
@@ -56,6 +38,37 @@ void GlobalState::addIgnoredView(BinaryViewRef bv)
 bool GlobalState::viewIsIgnored(BinaryViewRef bv)
 {
     return g_ignoredViews.count(id(std::move(bv))) > 0;
+}
+
+SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
+{
+    if (const auto& it = g_viewInfos.find(id(data)); it != g_viewInfos.end())
+        return it->second;
+
+    SharedAnalysisInfo info = std::make_shared<AnalysisInfo>();
+
+    auto meta = data->QueryMetadata("Objective-C");
+    if (!meta)
+        return info;
+
+    auto metaKVS = meta->GetKeyValueStore();
+    if (metaKVS["version"]->GetUnsignedInteger() != 1)
+    {
+        BinaryNinja::LogError("workflow_objc: Invalid metadata version received!");
+        return info;
+    }
+    for (const auto& selAndImps : metaKVS["selRefImplementations"]->GetArray())
+        info->selRefToImp[selAndImps->GetArray()[0]->GetUnsignedInteger()] = selAndImps->GetArray()[1]->GetUnsignedIntegerList();
+    for (const auto& selAndImps : metaKVS["selImplementations"]->GetArray())
+        info->selToImp[selAndImps->GetArray()[0]->GetUnsignedInteger()] = selAndImps->GetArray()[1]->GetUnsignedIntegerList();
+
+    g_viewInfos[id(data)] = info;
+    return info;
+}
+
+bool GlobalState::hasAnalysisInfo(BinaryViewRef data)
+{
+    return data->QueryMetadata("Objective-C") != nullptr;
 }
 
 bool GlobalState::hasFlag(BinaryViewRef bv, const std::string& flag)

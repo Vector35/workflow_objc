@@ -17,40 +17,12 @@ endif()
 # Binary Ninja plugin ----------------------------------------------------------
 
 set(PLUGIN_SOURCE
-  Core/Analyzers/CFStringAnalyzer.h
-  Core/Analyzers/ClassAnalyzer.h
-  Core/Analyzers/SelectorAnalyzer.h
-  Core/Analyzers/ClassRefAnalyzer.h
-  Core/BinaryViewFile.h
-  Core/ABI.h
-  Core/AbstractFile.h
-  Core/AnalysisInfo.h
-  Core/AnalysisProvider.h
-  Core/Analyzer.h
-  Core/TypeParser.h
-  Core/Analyzers/CFStringAnalyzer.cpp
-  Core/Analyzers/ClassAnalyzer.cpp
-  Core/Analyzers/SelectorAnalyzer.cpp
-  Core/Analyzers/ClassRefAnalyzer.cpp
-  Core/BinaryViewFile.cpp
-  Core/ABI.cpp
-  Core/AbstractFile.cpp
-  Core/AnalysisInfo.cpp
-  Core/AnalysisProvider.cpp
-  Core/Analyzer.cpp
-  Core/TypeParser.cpp
   ArchitectureHooks.cpp
   ArchitectureHooks.h
-  Commands.h
-  Commands.cpp
-  CustomTypes.h
-  CustomTypes.cpp
   DataRenderers.h
   DataRenderers.cpp
   GlobalState.h
   GlobalState.cpp
-  InfoHandler.h
-  InfoHandler.cpp
   MessageHandler.cpp
   MessageHandler.h
   Plugin.cpp

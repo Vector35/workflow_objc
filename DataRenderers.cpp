@@ -7,10 +7,6 @@
 
 #include "DataRenderers.h"
 
-#include "CustomTypes.h"
-
-#include "Core/ABI.h"
-
 #include <cinttypes>
 #include <cstdio>
 
@@ -79,65 +75,12 @@ bool isType(const DataRendererContext& context, const std::string& name)
     return deepestType->GetTypeName().GetString() == name;
 }
 
-/* ---- Tagged Pointer ------------------------------------------------------ */
-
-bool TaggedPointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t address,
-    Type* type, DataRendererContext& context)
-{
-    return isType(context, CustomTypes::TaggedPointer);
-}
-
-std::vector<DisassemblyTextLine> TaggedPointerDataRenderer::GetLinesForData(
-    BinaryView* bv, uint64_t address, Type*,
-    const std::vector<InstructionTextToken>& prefix, size_t,
-    DataRendererContext&)
-{
-    BinaryReader reader(bv);
-    reader.Seek(address);
-
-    auto pointer = ObjectiveNinja::ABI::decodePointer(reader.Read64(), bv->GetStart());
-
-    return { lineForPointer(bv, pointer, address, prefix) };
-}
-
-void TaggedPointerDataRenderer::Register()
-{
-    DataRendererContainer::RegisterTypeSpecificDataRenderer(new TaggedPointerDataRenderer());
-}
-
-/* ---- Fast Pointer -------------------------------------------------------- */
-
-bool FastPointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t address,
-    Type* type, DataRendererContext& context)
-{
-    return isType(context, CustomTypes::FastPointer);
-}
-
-std::vector<DisassemblyTextLine> FastPointerDataRenderer::GetLinesForData(
-    BinaryView* bv, uint64_t address, Type*,
-    const std::vector<InstructionTextToken>& prefix, size_t,
-    DataRendererContext&)
-{
-    BinaryReader reader(bv);
-    reader.Seek(address);
-
-    auto pointer = ObjectiveNinja::ABI::decodePointer(reader.Read64(), bv->GetStart());
-    pointer &= ~ObjectiveNinja::ABI::FastPointerDataMask;
-
-    return { lineForPointer(bv, pointer, address, prefix) };
-}
-
-void FastPointerDataRenderer::Register()
-{
-    DataRendererContainer::RegisterTypeSpecificDataRenderer(new FastPointerDataRenderer());
-}
-
 /* ---- Relative Pointer ---------------------------------------------------- */
 
 bool RelativePointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t address,
     Type* type, DataRendererContext& context)
 {
-    return isType(context, CustomTypes::RelativePointer);
+    return isType(context, "rptr_t");
 }
 
 std::vector<DisassemblyTextLine> RelativePointerDataRenderer::GetLinesForData(

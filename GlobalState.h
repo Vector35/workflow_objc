@@ -9,10 +9,7 @@
 
 #include "BinaryNinja.h"
 
-#include "Core/AnalysisInfo.h"
 #include "MessageHandler.h"
-
-using SharedAnalysisInfo = std::shared_ptr<ObjectiveNinja::AnalysisInfo>;
 
 /**
  * Namespace to hold metadata flag key constants.
@@ -23,6 +20,13 @@ constexpr auto DidRunWorkflow = "objectiveNinja.didRunWorkflow";
 constexpr auto DidRunStructureAnalysis = "objectiveNinja.didRunStructureAnalysis";
 
 }
+
+struct AnalysisInfo {
+    std::unordered_map<uint64_t, std::vector<uint64_t>> selRefToImp;
+    std::unordered_map<uint64_t, std::vector<uint64_t>> selToImp;
+};
+
+typedef std::shared_ptr<AnalysisInfo> SharedAnalysisInfo;
 
 /**
  * Global state/storage interface.
@@ -43,10 +47,6 @@ public:
      * Get ObjC Message Handler for a view
      */
     static MessageHandler* messageHandler(BinaryViewRef);
-    /**
-     * Store analysis info for a view.
-     */
-    static void storeAnalysisInfo(BinaryViewRef, SharedAnalysisInfo);
 
     /**
      * Check if analysis info exists for a view.

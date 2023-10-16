@@ -8,14 +8,9 @@
 #include "Workflow.h"
 
 #include "Constants.h"
-#include "CustomTypes.h"
 #include "GlobalState.h"
-#include "InfoHandler.h"
 #include "Performance.h"
 #include "ArchitectureHooks.h"
-
-#include "Core/AnalysisProvider.h"
-#include "Core/BinaryViewFile.h"
 
 #include <lowlevelilinstruction.h>
 
@@ -44,17 +39,29 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     // example, if the selector is for a method defined outside the current
     // binary. If this is the case, there are no meaningful changes that can be
     // made to the IL, and the operation should be aborted.
+
+    // k: also check direct selector value (x64 does this)
     const auto info = GlobalState::analysisInfo(bv);
-    if (!info || !info->selectorRefsByKey.count(rawSelector))
+    if (!info)
         return;
-    const auto selectorRef = info->selectorRefsByKey[rawSelector];
+    std::vector<uint64_t> imps;
+    if (const auto& it = info->selRefToImp.find(rawSelector); it != info->selRefToImp.end())
+        imps = it->second;
+    else if (const auto& iter = info->selToImp.find(rawSelector); iter != info->selToImp.end())
+        imps = iter->second;
+
+    if (imps.empty())
+        return;
 
     // Attempt to look up the implementation for the given selector, first by
     // using the raw selector, then by the address of the selector reference. If
     // the lookup fails in both cases, abort.
-    uint64_t implAddress = info->methodImpls[selectorRef->rawSelector];
-    if (!implAddress)
-        implAddress = info->methodImpls[selectorRef->address];
+
+    // k: This is the same behavior as before, however it is more apparent now by implementation
+    //      that we are effectively just guessing which method this hits. This has _obvious_ drawbacks,
+    //      but until we have more robust typing and objective-c type libraries, fixing this would
+    //      make the objective-c workflow do effectively nothing.
+    uint64_t implAddress = imps[0];
     if (!implAddress)
         return;
 
@@ -123,68 +130,6 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
 
         GlobalState::addIgnoredView(bv);
         return;
-    }
-
-    // The workflow relies on some data acquired through analysis of Objective-C
-    // structures present in the binary. The structure analysis must run
-    // exactly once per binary. Until the Workflows API supports a "run once"
-    // idiom, this is accomplished through a mutex and a check for present
-    // analysis information.
-    {
-        std::scoped_lock<std::mutex> lock(g_initialAnalysisMutex);
-
-        if (!GlobalState::hasAnalysisInfo(bv)) {
-            SharedAnalysisInfo info;
-            CustomTypes::defineAll(bv);
-            auto messageHandler = GlobalState::messageHandler(bv);
-
-            try {
-                auto file = std::make_shared<ObjectiveNinja::BinaryViewFile>(bv);
-
-                auto start = Performance::now();
-                info = ObjectiveNinja::AnalysisProvider::infoForFile(file);
-                auto elapsed = Performance::elapsed<std::chrono::milliseconds>(start);
-
-                const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
-                log->LogInfo("Structures analyzed in %lu ms", elapsed.count());
-
-                InfoHandler::applyInfoToView(info, bv);
-
-                const auto msgSendFunctions = messageHandler->getMessageSendFunctions();
-                for (auto addr : msgSendFunctions)
-                {
-                    BinaryNinja::QualifiedNameAndType nameAndType;
-                    std::string errors;
-                    std::set<BinaryNinja::QualifiedName> typesAllowRedefinition;
-
-                    // void *
-                    auto retType = BinaryNinja::Confidence<BinaryNinja::Ref<BinaryNinja::Type>>(
-                            BinaryNinja::Type::PointerType(bv->GetAddressSize(),BinaryNinja::Type::VoidType(), 
-                            0));
-
-                    std::vector<BinaryNinja::FunctionParameter> params;
-                    auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
-
-                    params.push_back({"self",
-                        BinaryNinja::Type::NamedType(bv, {"id"}),
-                        true,
-                        BinaryNinja::Variable()});
-                    params.push_back({"sel",
-                        BinaryNinja::Type::PointerType(bv->GetAddressSize(), BinaryNinja::Type::IntegerType(1, false)),
-                        true,
-                        BinaryNinja::Variable()});
-
-                    auto funcType = BinaryNinja::Type::FunctionType(retType, cc, params, true);
-                    bv->DefineDataVariable(addr, BinaryNinja::Type::PointerType(bv->GetDefaultArchitecture(), funcType));
-                }
-            } catch (...) {
-                log->LogError("Structure analysis failed; binary may be malformed.");
-                log->LogError("Objective-C analysis will not be applied due to previous errors.");
-            }
-
-            GlobalState::setFlag(bv, Flag::DidRunStructureAnalysis);
-            GlobalState::storeAnalysisInfo(bv, info);
-        }
     }
 
     auto messageHandler = GlobalState::messageHandler(bv);

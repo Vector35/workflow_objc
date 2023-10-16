@@ -5,7 +5,6 @@
  * terms of the license can be found in the LICENSE.txt file.
  */
 
-#include "Commands.h"
 #include "Constants.h"
 #include "DataRenderers.h"
 #include "Workflow.h"
@@ -24,12 +23,9 @@ BINARYNINJAPLUGIN void CorePluginDependencies()
 
 BINARYNINJAPLUGIN bool CorePluginInit()
 {
-    TaggedPointerDataRenderer::Register();
-    FastPointerDataRenderer::Register();
     RelativePointerDataRenderer::Register();
 
     Workflow::registerActivities();
-    Commands::registerCommands();
 
     std::vector<BinaryNinja::Ref<BinaryNinja::Architecture>> targets = {
         BinaryNinja::Architecture::GetByName("aarch64"),
