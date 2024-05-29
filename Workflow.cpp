@@ -122,7 +122,7 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
     // defined successfully.
     auto defaultArch = bv->GetDefaultArchitecture();
     auto defaultArchName = defaultArch ? defaultArch->GetName() : "";
-    if (defaultArchName != "aarch64" && defaultArchName != "x86_64") {
+    if (defaultArchName != "aarch64" && defaultArchName != "x86_64" && defaultArchName != "armv7" && defaultArchName != "thumb2") {
         if (!defaultArch)
             log->LogError("View must have a default architecture.");
         else
@@ -134,9 +134,9 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
 
     auto messageHandler = GlobalState::messageHandler(bv);
     if (!messageHandler->hasMessageSendFunctions()) {
-        log->LogError("Cannot perform Objective-C IL cleanup; no objc_msgSend candidates found");
-        GlobalState::addIgnoredView(bv);
-        return;
+        //log->LogError("Cannot perform Objective-C IL cleanup; no objc_msgSend candidates found");
+        //GlobalState::addIgnoredView(bv);
+        //return;
     }
 
     const auto llil = ac->GetLowLevelILFunction();
@@ -157,7 +157,10 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
         {
             // Filter out calls that aren't to `objc_msgSend`.
             auto callExpr = insn.GetDestExpr<LLIL_CALL_SSA>();
-            if (!messageHandler->isMessageSend(callExpr.GetValue().value))
+            bool isMessageSend = messageHandler->isMessageSend(callExpr.GetValue().value);
+            if (auto symbol = bv->GetSymbolByAddress(callExpr.GetValue().value))
+                isMessageSend = isMessageSend || symbol->GetRawName() == "_objc_msgSend";
+            if (!isMessageSend)
                 return;
 
             // By convention, the selector is the second argument to `objc_msgSend`,
