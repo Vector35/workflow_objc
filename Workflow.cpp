@@ -15,11 +15,39 @@
 #include <lowlevelilinstruction.h>
 
 #include <queue>
+#include "binaryninjaapi.h"
 
 static std::mutex g_initialAnalysisMutex;
 
 using SectionRef = BinaryNinja::Ref<BinaryNinja::Section>;
 using SymbolRef = BinaryNinja::Ref<BinaryNinja::Symbol>;
+
+std::vector<std::string> splitSelector(const std::string& selector) {
+    std::vector<std::string> components;
+    std::istringstream stream(selector);
+    std::string component;
+
+    while (std::getline(stream, component, ':')) {
+        if (!component.empty()) {
+            components.push_back(component);
+        }
+    }
+
+    return components;
+}
+
+std::vector<std::string> generateArgumentNames(const std::vector<std::string>& components) {
+    std::vector<std::string> argumentNames;
+
+    for (const std::string& component : components) {
+        size_t startPos = component.find_last_of(" ");
+        std::string argumentName = (startPos == std::string::npos) ? component : component.substr(startPos + 1);
+        argumentNames.push_back(argumentName);
+    }
+
+    return argumentNames;
+}
+
 
 void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
 {
@@ -31,8 +59,57 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     // The second parameter passed to the objc_msgSend call is the address of
     // either the selector reference or the method's name, which in both cases
     // is dereferenced to retrieve a selector.
-    const auto selectorRegister = params[1].GetSourceSSARegister<LLIL_REG_SSA>();
-    uint64_t rawSelector = ssa->GetSSARegisterValue(selectorRegister).value;
+    if (params.size() < 2)
+        return;
+    uint64_t rawSelector = 0;
+    if (params[1].operation == LLIL_REG_SSA)
+    {
+        const auto selectorRegister = params[1].GetSourceSSARegister<LLIL_REG_SSA>();
+        rawSelector = ssa->GetSSARegisterValue(selectorRegister).value;
+    }
+    else if (params[0].operation == LLIL_SEPARATE_PARAM_LIST_SSA)
+    {
+        if (params[0].GetParameterExprs<LLIL_SEPARATE_PARAM_LIST_SSA>().size() == 0)
+        {
+            return;
+        }
+        const auto selectorRegister = params[0].GetParameterExprs<LLIL_SEPARATE_PARAM_LIST_SSA>()[1].GetSourceSSARegister<LLIL_REG_SSA>();
+        rawSelector = ssa->GetSSARegisterValue(selectorRegister).value;
+    }
+    if (rawSelector == 0)
+        return;
+
+    // -- Do callsite override
+    auto reader = BinaryNinja::BinaryReader(bv);
+    reader.Seek(rawSelector);
+    auto selector = reader.ReadCString(500);
+    auto additionalArgumentCount = std::count(selector.begin(), selector.end(), ':');
+
+    auto retType = bv->GetTypeByName({ "id" });
+
+    std::vector<BinaryNinja::FunctionParameter> callTypeParams;
+    auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
+
+    callTypeParams.push_back({"self", retType, true, BinaryNinja::Variable()});
+
+    callTypeParams.push_back({"sel", bv->GetTypeByName({ "SEL" }), true, BinaryNinja::Variable()});
+
+    std::vector<std::string> selectorComponents = splitSelector(selector);
+    std::vector<std::string> argumentNames = generateArgumentNames(selectorComponents);
+
+    for (size_t i = 0; i < additionalArgumentCount; i++)
+    {
+        auto argType = BinaryNinja::Type::IntegerType(bv->GetAddressSize(), true);
+        if (argumentNames.size() > i && !argumentNames[i].empty())
+            callTypeParams.push_back({argumentNames[i], argType, true, BinaryNinja::Variable()});
+        else
+            callTypeParams.push_back({"arg" + std::to_string(i), argType, true, BinaryNinja::Variable()});
+    }
+
+    auto funcType = BinaryNinja::Type::FunctionType(retType, cc, callTypeParams);
+    ssa->GetFunction()->SetAutoCallTypeAdjustment(ssa->GetFunction()->GetArchitecture(), insn.address, {funcType, BN_HEURISTIC_CONFIDENCE});
+    // --
+
 
     // Check the analysis info for a selector reference corresponding to the
     // current selector. It is possible no such selector reference exists, for
@@ -161,15 +238,6 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
             if (auto symbol = bv->GetSymbolByAddress(callExpr.GetValue().value))
                 isMessageSend = isMessageSend || symbol->GetRawName() == "_objc_msgSend";
             if (!isMessageSend)
-                return;
-
-            // By convention, the selector is the second argument to `objc_msgSend`,
-            // therefore two parameters are required for a proper rewrite; abort if
-            // this condition is not met.
-            auto params = insn.GetParameterExprs<LLIL_CALL_SSA>();
-            if (params.size() < 2
-                || params[0].operation != LLIL_REG_SSA
-                || params[1].operation != LLIL_REG_SSA)
                 return;
 
             rewriteMethodCall(ssa, insnIndex);
