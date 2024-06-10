@@ -43,7 +43,8 @@ bool GlobalState::viewIsIgnored(BinaryViewRef bv)
 SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
 {
     if (const auto& it = g_viewInfos.find(id(data)); it != g_viewInfos.end())
-        return it->second;
+        if (data->GetStart() == it->second->imageBase)
+            return it->second;
 
     SharedAnalysisInfo info = std::make_shared<AnalysisInfo>();
 
@@ -57,6 +58,7 @@ SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
         BinaryNinja::LogError("workflow_objc: Invalid metadata version received!");
         return info;
     }
+    info->imageBase = data->GetStart();
     for (const auto& selAndImps : metaKVS["selRefImplementations"]->GetArray())
         info->selRefToImp[selAndImps->GetArray()[0]->GetUnsignedInteger()] = selAndImps->GetArray()[1]->GetUnsignedIntegerList();
     for (const auto& selAndImps : metaKVS["selImplementations"]->GetArray())

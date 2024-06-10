@@ -22,6 +22,7 @@ constexpr auto DidRunStructureAnalysis = "objectiveNinja.didRunStructureAnalysis
 }
 
 struct AnalysisInfo {
+    std::uint64_t imageBase;
     std::unordered_map<uint64_t, std::vector<uint64_t>> selRefToImp;
     std::unordered_map<uint64_t, std::vector<uint64_t>> selToImp;
 };
