@@ -48,6 +48,11 @@ SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
 
     SharedAnalysisInfo info = std::make_shared<AnalysisInfo>();
 
+    if (auto objcStubs = data->GetSectionByName("__objc_stubs"))
+    {
+        info->objcStubsStartEnd = {objcStubs->GetStart(), objcStubs->GetEnd()};
+    }
+
     auto meta = data->QueryMetadata("Objective-C");
     if (!meta)
         return info;
