@@ -209,6 +209,16 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
         return;
     }
 
+    if (auto info = GlobalState::analysisInfo(bv))
+    {
+        if (info->hasObjcStubs && func->GetStart() > info->objcStubsStartEnd.first && func->GetStart() < info->objcStubsStartEnd.second)
+        {
+            func->SetAutoInlinedDuringAnalysis({true, BN_FULL_CONFIDENCE});
+            // Do no further cleanup, this is a stub and it will be cleaned up after inlining
+            return;
+        }
+    }
+
     auto messageHandler = GlobalState::messageHandler(bv);
     if (!messageHandler->hasMessageSendFunctions()) {
         //log->LogError("Cannot perform Objective-C IL cleanup; no objc_msgSend candidates found");
