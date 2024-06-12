@@ -3,26 +3,17 @@
 This is the Objective-C plugin that ships with Binary Ninja. It provides
 additional support for analyzing Objective-C binaries.
 
-Some of the main features offered by this plugin are:
+The primary functionality offered by this plugin is:
 
 - **Function Call Cleanup.** When using the Objective-C workflow, calls to
   `objc_msgSend` can be replaced with direct calls to the relevant function's
   implementation.
-
-- **Name and Type Recovery.** Using runtime information embedded in the
-  binary, Binary Ninja can automatically apply names and type information to
-  Objective-C functions.
-
-- **Structure Markup.** Data variables are automatically created for Objective-C
-  structures such as classes and method lists to enable easy navigation.
-
-- **Data Renderers.** Formatting of Objective-C types such as tagged and/or
-  (image-)relative pointers is improved via custom data renderers.
-
-- **CFString Handling.** Data variables are automatically created for all
-  `CFString` instances present in the binary.
-
+  
 For more details and usage instructions, see the [user guide](https://dev-docs.binary.ninja/guide/objectivec.html).
+
+## Issues
+
+Issues for this repository have been disabled. Please file an issue for this repository at https://github.com/Vector35/binaryninja-api/issues. All previously existing issues for this repository have been transferred there as well.
 
 ## Building
 
