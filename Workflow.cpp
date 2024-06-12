@@ -86,13 +86,18 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     auto additionalArgumentCount = std::count(selector.begin(), selector.end(), ':');
 
     auto retType = bv->GetTypeByName({ "id" });
+    if (!retType)
+        retType = BinaryNinja::Type::PointerType(ssa->GetArchitecture(), BinaryNinja::Type::VoidType());
 
     std::vector<BinaryNinja::FunctionParameter> callTypeParams;
     auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
 
     callTypeParams.push_back({"self", retType, true, BinaryNinja::Variable()});
 
-    callTypeParams.push_back({"sel", bv->GetTypeByName({ "SEL" }), true, BinaryNinja::Variable()});
+    auto selType = bv->GetTypeByName({ "SEL" });
+    if (!selType)
+        selType = BinaryNinja::Type::PointerType(ssa->GetArchitecture(), BinaryNinja::Type::IntegerType(1, true));
+    callTypeParams.push_back({"sel", selType, true, BinaryNinja::Variable()});
 
     std::vector<std::string> selectorComponents = splitSelector(selector);
     std::vector<std::string> argumentNames = generateArgumentNames(selectorComponents);
@@ -107,7 +112,7 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     }
 
     auto funcType = BinaryNinja::Type::FunctionType(retType, cc, callTypeParams);
-    ssa->GetFunction()->SetAutoCallTypeAdjustment(ssa->GetFunction()->GetArchitecture(), insn.address, {funcType, BN_HEURISTIC_CONFIDENCE});
+    ssa->GetFunction()->SetAutoCallTypeAdjustment(ssa->GetFunction()->GetArchitecture(), insn.address, {funcType, BN_DEFAULT_CONFIDENCE});
     // --
 
 
