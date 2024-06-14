@@ -24,6 +24,7 @@ BINARYNINJAPLUGIN void CorePluginDependencies()
 BINARYNINJAPLUGIN bool CorePluginInit()
 {
     RelativePointerDataRenderer::Register();
+    CFStringDataRenderer::Register();
 
     Workflow::registerActivities();
 
