@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include "BinaryNinja.h"
 
 #include "MessageHandler.h"
@@ -30,6 +31,64 @@ struct AnalysisInfo {
 };
 
 typedef std::shared_ptr<AnalysisInfo> SharedAnalysisInfo;
+
+class ReadWriteLock
+{
+public:
+    void lockRead()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        readersCond.wait(lock, [this]() { return !writerActive; });
+        ++readersActive;
+    }
+
+    void unlockRead()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        if (--readersActive == 0)
+            writersCond.notify_one();
+    }
+
+    void lockWrite()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        writersCond.wait(lock, [this]() { return !writerActive && readersActive == 0; });
+        writerActive = true;
+    }
+
+    void unlockWrite()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        writerActive = false;
+        writersCond.notify_one();
+        readersCond.notify_all();
+    }
+
+private:
+    std::mutex mutex;
+    std::condition_variable readersCond;
+    std::condition_variable writersCond;
+    int readersActive = 0;
+    bool writerActive = false;
+};
+
+class ReaderLock {
+public:
+    ReaderLock(ReadWriteLock& lock) : lock(lock) { lock.lockRead(); }
+    ~ReaderLock() { lock.unlockRead(); }
+
+private:
+    ReadWriteLock& lock;
+};
+
+class WriterLock {
+public:
+    WriterLock(ReadWriteLock& lock) : lock(lock) { lock.lockWrite(); }
+    ~WriterLock() { lock.unlockWrite(); }
+
+private:
+        ReadWriteLock& lock;
+};
 
 /**
  * Global state/storage interface.

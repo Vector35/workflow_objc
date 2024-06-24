@@ -11,14 +11,21 @@
 #include <unordered_map>
 
 static std::unordered_map<BinaryViewID, MessageHandler*> g_messageHandlers;
+static ReadWriteLock g_messageHandlerLock;
 static std::unordered_map<BinaryViewID, SharedAnalysisInfo> g_viewInfos;
+static ReadWriteLock g_viewInfoLock;
 static std::set<BinaryViewID> g_ignoredViews;
+
 
 MessageHandler* GlobalState::messageHandler(BinaryViewRef bv)
 {
+    g_messageHandlerLock.lockRead();
     if (auto messageHandler = g_messageHandlers.find(id(bv)); messageHandler != g_messageHandlers.end()) {
+        g_messageHandlerLock.unlockRead();
         return messageHandler->second;
     } else {
+        g_messageHandlerLock.unlockRead();
+        WriterLock lock(g_messageHandlerLock);
         auto newMessageHandler = new MessageHandler(bv);
         g_messageHandlers[id(bv)] = newMessageHandler;
         return newMessageHandler;
@@ -42,10 +49,19 @@ bool GlobalState::viewIsIgnored(BinaryViewRef bv)
 
 SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
 {
-    if (const auto& it = g_viewInfos.find(id(data)); it != g_viewInfos.end())
+    g_viewInfoLock.lockRead();
+    auto it = g_viewInfos.find(id(data));
+    if (it != g_viewInfos.end())
+    {
         if (data->GetStart() == it->second->imageBase)
+        {
+            g_viewInfoLock.unlockRead();
             return it->second;
+        }
+    }
+    g_viewInfoLock.unlockRead();
 
+    WriterLock lock(g_viewInfoLock);
     SharedAnalysisInfo info = std::make_shared<AnalysisInfo>();
 
     if (auto objcStubs = data->GetSectionByName("__objc_stubs"))
@@ -56,12 +72,16 @@ SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
 
     auto meta = data->QueryMetadata("Objective-C");
     if (!meta)
+    {
+        g_viewInfos[id(data)] = info;
         return info;
+    }
 
     auto metaKVS = meta->GetKeyValueStore();
     if (metaKVS["version"]->GetUnsignedInteger() != 1)
     {
         BinaryNinja::LogError("workflow_objc: Invalid metadata version received!");
+        g_viewInfos[id(data)] = info;
         return info;
     }
     info->imageBase = data->GetStart();
