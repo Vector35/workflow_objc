@@ -24,7 +24,7 @@ public:
     std::vector<BinaryNinja::DisassemblyTextLine> GetLinesForData(
         BinaryViewPtr, uint64_t address, TypePtr,
         const std::vector<BinaryNinja::InstructionTextToken>& prefix,
-        size_t width, DataRendererContext&) override;
+        size_t width, DataRendererContext&, const std::string&) override;
 
     static void Register();
 };

@@ -86,7 +86,7 @@ bool RelativePointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t addres
 std::vector<DisassemblyTextLine> RelativePointerDataRenderer::GetLinesForData(
     BinaryView* bv, uint64_t address, Type*,
     const std::vector<InstructionTextToken>& prefix, size_t,
-    DataRendererContext&)
+    DataRendererContext&, const std::string&)
 {
     BinaryReader reader(bv);
     reader.Seek(address);
