@@ -283,7 +283,7 @@ static constexpr auto WorkflowInfo = R"({
 
 void Workflow::registerActivities()
 {
-    const auto wf = BinaryNinja::Workflow::Instance()->Clone("core.function.objectiveC");
+    const auto wf = BinaryNinja::Workflow::Instance("core.function.defaultAnalysis")->Clone("core.function.objectiveC");
     wf->RegisterActivity(new BinaryNinja::Activity(
         ActivityID::ResolveMethodCalls, &Workflow::inlineMethodCalls));
     wf->Insert("core.function.translateTailCalls", ActivityID::ResolveMethodCalls);
