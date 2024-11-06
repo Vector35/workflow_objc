@@ -233,12 +233,12 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
 
     const auto llil = ac->GetLowLevelILFunction();
     if (!llil) {
-        log->LogError("(Workflow) Failed to get LLIL for 0x%llx", func->GetStart());
+        // log->LogError("(Workflow) Failed to get LLIL for 0x%llx", func->GetStart());
         return;
     }
     const auto ssa = llil->GetSSAForm();
     if (!ssa) {
-        log->LogError("(Workflow) Failed to get LLIL SSA form for 0x%llx", func->GetStart());
+        // log->LogError("(Workflow) Failed to get LLIL SSA form for 0x%llx", func->GetStart());
         return;
     }
 
