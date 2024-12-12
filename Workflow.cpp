@@ -263,7 +263,10 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
             auto sourceExpr = insn.GetSourceExpr<LLIL_SET_REG_SSA>();
             auto addr = sourceExpr.GetValue().value;
             BinaryNinja::DataVariable var;
-            if (!bv->GetDataVariableAtAddress(addr, var) || var.type->GetString() != "struct CFString")
+            if (!bv->GetDataVariableAtAddress(addr, var))
+                return;
+            const auto varTypeString = var.type->GetString();
+            if (varTypeString != "struct CFString" && varTypeString != "struct __NSConstantString")
                 return;
 
             rewriteCFString(ssa, insnIndex);
