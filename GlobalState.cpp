@@ -8,28 +8,25 @@
 #include "GlobalState.h"
 
 #include <set>
+#include <shared_mutex>
 #include <unordered_map>
 
 static std::unordered_map<BinaryViewID, MessageHandler*> g_messageHandlers;
-static ReadWriteLock g_messageHandlerLock;
+static std::shared_mutex g_messageHandlerLock;
 static std::unordered_map<BinaryViewID, SharedAnalysisInfo> g_viewInfos;
-static ReadWriteLock g_viewInfoLock;
+static std::shared_mutex g_viewInfoLock;
 static std::set<BinaryViewID> g_ignoredViews;
 
 
 MessageHandler* GlobalState::messageHandler(BinaryViewRef bv)
 {
-    g_messageHandlerLock.lockRead();
-    if (auto messageHandler = g_messageHandlers.find(id(bv)); messageHandler != g_messageHandlers.end()) {
-        g_messageHandlerLock.unlockRead();
+    std::unique_lock<std::shared_mutex> lock(g_messageHandlerLock);
+    auto messageHandler = g_messageHandlers.find(id(bv));
+    if (messageHandler != g_messageHandlers.end())
         return messageHandler->second;
-    } else {
-        g_messageHandlerLock.unlockRead();
-        WriterLock lock(g_messageHandlerLock);
-        auto newMessageHandler = new MessageHandler(bv);
-        g_messageHandlers[id(bv)] = newMessageHandler;
-        return newMessageHandler;
-    }
+    auto newMessageHandler = new MessageHandler(bv);
+    g_messageHandlers[id(bv)] = newMessageHandler;
+    return newMessageHandler;
 }
 
 BinaryViewID GlobalState::id(BinaryViewRef bv)
@@ -49,20 +46,16 @@ bool GlobalState::viewIsIgnored(BinaryViewRef bv)
 
 SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
 {
-    g_viewInfoLock.lockRead();
-    auto it = g_viewInfos.find(id(data));
-    if (it != g_viewInfos.end())
     {
-        if (data->GetStart() == it->second->imageBase)
-        {
-            g_viewInfoLock.unlockRead();
-            return it->second;
-        }
+        std::shared_lock<std::shared_mutex> lock(g_viewInfoLock);
+        if (auto it = g_viewInfos.find(id(data)); it != g_viewInfos.end())
+            if (data->GetStart() == it->second->imageBase)
+                return it->second;
     }
-    g_viewInfoLock.unlockRead();
 
-    WriterLock lock(g_viewInfoLock);
+    std::unique_lock<std::shared_mutex> lock(g_viewInfoLock);
     SharedAnalysisInfo info = std::make_shared<AnalysisInfo>();
+    info->imageBase = data->GetStart();
 
     if (auto objcStubs = data->GetSectionByName("__objc_stubs"))
     {
@@ -84,7 +77,6 @@ SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef data)
         g_viewInfos[id(data)] = info;
         return info;
     }
-    info->imageBase = data->GetStart();
     for (const auto& selAndImps : metaKVS["selRefImplementations"]->GetArray())
         info->selRefToImp[selAndImps->GetArray()[0]->GetUnsignedInteger()] = selAndImps->GetArray()[1]->GetUnsignedIntegerList();
     for (const auto& selAndImps : metaKVS["selImplementations"]->GetArray())
