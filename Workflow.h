@@ -29,14 +29,14 @@ class Workflow {
      *
      * @param insnIndex The index of the `LLIL_CALL` instruction to rewrite
      */
-    static void rewriteMethodCall(LLILFunctionRef, size_t insnIndex);
+    static bool rewriteMethodCall(LLILFunctionRef, size_t insnIndex);
 
     /**
      * Rewrite a CFString reference to a direct string reference and matching CFSTR intrinsic call.
      *
      * @param insnIndex The index of the `LLIL_CALL` instruction to rewrite
      */
-    static void rewriteCFString(LLILFunctionRef, size_t insnIndex);
+    static bool rewriteCFString(LLILFunctionRef, size_t insnIndex);
 
 public:
     /**
