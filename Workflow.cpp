@@ -49,7 +49,7 @@ std::vector<std::string> generateArgumentNames(const std::vector<std::string>& c
 }
 
 
-void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
+bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
 {
     const auto bv = ssa->GetFunction()->GetView();
     const auto llil = ssa->GetNonSSAForm();
@@ -60,7 +60,7 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     // either the selector reference or the method's name, which in both cases
     // is dereferenced to retrieve a selector.
     if (params.size() < 2)
-        return;
+        return false;
     uint64_t rawSelector = 0;
     if (params[1].operation == LLIL_REG_SSA)
     {
@@ -71,13 +71,13 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     {
         if (params[0].GetParameterExprs<LLIL_SEPARATE_PARAM_LIST_SSA>().size() == 0)
         {
-            return;
+            return false;
         }
         const auto selectorRegister = params[0].GetParameterExprs<LLIL_SEPARATE_PARAM_LIST_SSA>()[1].GetSourceSSARegister<LLIL_REG_SSA>();
         rawSelector = ssa->GetSSARegisterValue(selectorRegister).value;
     }
     if (rawSelector == 0)
-        return;
+        return false;
 
     // -- Do callsite override
     auto reader = BinaryNinja::BinaryReader(bv);
@@ -125,7 +125,7 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     // k: also check direct selector value (x64 does this)
     const auto info = GlobalState::analysisInfo(bv);
     if (!info)
-        return;
+        return false;
     std::vector<uint64_t> imps;
     if (const auto& it = info->selRefToImp.find(rawSelector); it != info->selRefToImp.end())
         imps = it->second;
@@ -133,7 +133,7 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
         imps = iter->second;
 
     if (imps.empty())
-        return;
+        return false;
 
     // Attempt to look up the implementation for the given selector, first by
     // using the raw selector, then by the address of the selector reference. If
@@ -145,7 +145,7 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     //      make the objective-c workflow do effectively nothing.
     uint64_t implAddress = imps[0];
     if (!implAddress)
-        return;
+        return false;
 
     const auto llilIndex = ssa->GetNonSSAInstructionIndex(insnIndex);
     auto llilInsn = llil->GetInstruction(llilIndex);
@@ -157,10 +157,10 @@ void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     callDestExpr.Replace(llil->ConstPointer(callDestExpr.size, implAddress, callDestExpr));
     llilInsn.Replace(llil->Call(callDestExpr.exprIndex, llilInsn));
 
-    llil->GenerateSSAForm();
+    return true;
 }
 
-void Workflow::rewriteCFString(LLILFunctionRef ssa, size_t insnIndex)
+bool Workflow::rewriteCFString(LLILFunctionRef ssa, size_t insnIndex)
 {
     const auto bv = ssa->GetFunction()->GetView();
     const auto llil = ssa->GetNonSSAForm();
@@ -180,9 +180,7 @@ void Workflow::rewriteCFString(LLILFunctionRef ssa, size_t insnIndex)
     auto cfstrCall = llil->Intrinsic({ BinaryNinja::RegisterOrFlag(0, destRegister) }, CFSTRIntrinsicIndex, {targetPointer}, 0, llilInsn);
 
     llilInsn.Replace(cfstrCall);
-
-    llil->GenerateSSAForm();
-    llil->Finalize();
+    return true;
 }
 
 void Workflow::inlineMethodCalls(AnalysisContextRef ac)
@@ -253,10 +251,9 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
             if (auto symbol = bv->GetSymbolByAddress(callExpr.GetValue().value))
                 isMessageSend = isMessageSend || symbol->GetRawName() == "_objc_msgSend";
             if (!isMessageSend)
-                return;
+                return false;
 
-            rewriteMethodCall(ssa, insnIndex);
-
+            return rewriteMethodCall(ssa, insnIndex);
         }
         else if (insn.operation == LLIL_SET_REG_SSA)
         {
@@ -264,15 +261,23 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
             auto addr = sourceExpr.GetValue().value;
             BinaryNinja::DataVariable var;
             if (!bv->GetDataVariableAtAddress(addr, var) || var.type->GetString() != "struct CFString")
-                return;
+                return false;
 
-            rewriteCFString(ssa, insnIndex);
+            return rewriteCFString(ssa, insnIndex);
         }
     };
 
+    bool isFunctionChanged = false;
     for (const auto& block : ssa->GetBasicBlocks())
         for (size_t i = block->GetStart(), end = block->GetEnd(); i < end; ++i)
-            rewriteIfEligible(i);
+            if (rewriteIfEligible(i))
+                isFunctionChanged = true;
+
+    if (!isFunctionChanged)
+        return;
+
+    // Updates found, regenerate SSA form
+    llil->GenerateSSAForm();
 }
 
 static constexpr auto WorkflowInfo = R"({
