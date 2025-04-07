@@ -265,6 +265,8 @@ void Workflow::inlineMethodCalls(AnalysisContextRef ac)
 
             return rewriteCFString(ssa, insnIndex);
         }
+
+        return false;
     };
 
     bool isFunctionChanged = false;
