@@ -22,6 +22,8 @@ static std::mutex g_initialAnalysisMutex;
 using SectionRef = BinaryNinja::Ref<BinaryNinja::Section>;
 using SymbolRef = BinaryNinja::Ref<BinaryNinja::Symbol>;
 
+namespace {
+
 std::vector<std::string> splitSelector(const std::string& selector) {
     std::vector<std::string> components;
     std::istringstream stream(selector);
@@ -36,18 +38,48 @@ std::vector<std::string> splitSelector(const std::string& selector) {
     return components;
 }
 
+// Given a selector component such as `initWithPath' and a prefix of `initWith`, returns `path`.
+std::optional<std::string> SelectorComponentWithoutPrefix(std::string_view prefix, std::string_view component)
+{
+    if (component.size() <= prefix.size() || component.rfind(prefix.data(), 0) != 0
+        || !isupper(component[prefix.size()])) {
+        return std::nullopt;
+    }
+
+    std::string result(component.substr(prefix.size()));
+
+    // Lowercase the first character if the second character is not also uppercase.
+    // This ensures we leave initialisms such as `URL` alone.
+    if (result.size() > 1 && islower(result[1]))
+        result[0] = tolower(result[0]);
+
+    return result;
+}
+
+std::string ArgumentNameFromSelectorComponent(std::string component)
+{
+    // TODO: Handle other common patterns such as <do some action>With<arg>: and <do some action>For<arg>:
+    for (const auto& prefix : { "initWith", "with", "and", "using", "set", "read", "to", "for" }) {
+        if (auto argumentName = SelectorComponentWithoutPrefix(prefix, component); argumentName.has_value())
+            return std::move(*argumentName);
+    }
+
+    return component;
+}
+
 std::vector<std::string> generateArgumentNames(const std::vector<std::string>& components) {
     std::vector<std::string> argumentNames;
 
     for (const std::string& component : components) {
         size_t startPos = component.find_last_of(" ");
         std::string argumentName = (startPos == std::string::npos) ? component : component.substr(startPos + 1);
-        argumentNames.push_back(argumentName);
+        argumentNames.push_back(ArgumentNameFromSelectorComponent(std::move(argumentName)));
     }
 
     return argumentNames;
 }
 
+} // unnamed namespace
 
 bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
 {
