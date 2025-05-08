@@ -147,6 +147,8 @@ bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     ssa->GetFunction()->SetAutoCallTypeAdjustment(ssa->GetFunction()->GetArchitecture(), insn.address, {funcType, BN_DEFAULT_CONFIDENCE});
     // --
 
+    if (!BinaryNinja::Settings::Instance()->Get<bool>("core.function.objectiveC.assumeMessageSendTarget"))
+        return false;
 
     // Check the analysis info for a selector reference corresponding to the
     // current selector. It is possible no such selector reference exists, for
@@ -158,6 +160,10 @@ bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     const auto info = GlobalState::analysisInfo(bv);
     if (!info)
         return false;
+
+    // Attempt to look up the implementation for the given selector, first by
+    // using the raw selector, then by the address of the selector reference. If
+    // the lookup fails in both cases, abort.
     std::vector<uint64_t> imps;
     if (const auto& it = info->selRefToImp.find(rawSelector); it != info->selRefToImp.end())
         imps = it->second;
@@ -166,10 +172,6 @@ bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
 
     if (imps.empty())
         return false;
-
-    // Attempt to look up the implementation for the given selector, first by
-    // using the raw selector, then by the address of the selector reference. If
-    // the lookup fails in both cases, abort.
 
     // k: This is the same behavior as before, however it is more apparent now by implementation
     //      that we are effectively just guessing which method this hits. This has _obvious_ drawbacks,
