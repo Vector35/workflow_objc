@@ -147,7 +147,7 @@ bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     ssa->GetFunction()->SetAutoCallTypeAdjustment(ssa->GetFunction()->GetArchitecture(), insn.address, {funcType, BN_DEFAULT_CONFIDENCE});
     // --
 
-    if (!BinaryNinja::Settings::Instance()->Get<bool>("core.function.objectiveC.assumeMessageSendTarget"))
+    if (!BinaryNinja::Settings::Instance()->Get<bool>("core.function.objectiveC.rewriteMessageSendTarget", bv))
         return false;
 
     // Check the analysis info for a selector reference corresponding to the

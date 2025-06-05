@@ -42,11 +42,11 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     BinaryNinja::LogRegistry::CreateLogger(PluginLoggerName);
 
     auto settings = BinaryNinja::Settings::Instance();
-    settings->RegisterSetting("core.function.objectiveC.assumeMessageSendTarget",
+    settings->RegisterSetting("core.function.objectiveC.rewriteMessageSendTarget",
         R"({
-		"title" : "Rewrite objc_msgSend calls to first visible implementation",
+		"title" : "Rewrite objc_msgSend calls in IL",
 		"type" : "boolean",
-		"default" : true,
+		"default" : false,
 		"description" : "Message sends of selectors with any visible implementation are replaced with a direct call to the first visible implementation. Note that this can produce false positives if the selector is implemented by more than one class, or shares a name with a method from a system framework."
 		})");
 
