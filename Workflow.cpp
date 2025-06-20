@@ -83,7 +83,8 @@ std::vector<std::string> generateArgumentNames(const std::vector<std::string>& c
 
 bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
 {
-    const auto bv = ssa->GetFunction()->GetView();
+    auto function = ssa->GetFunction();
+    const auto bv = function->GetView();
     const auto llil = ssa->GetNonSSAForm();
     const auto insn = ssa->GetInstruction(insnIndex);
     const auto params = insn.GetParameterExprs<LLIL_CALL_SSA>();
@@ -144,10 +145,10 @@ bool Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
     }
 
     auto funcType = BinaryNinja::Type::FunctionType(retType, cc, callTypeParams);
-    ssa->GetFunction()->SetAutoCallTypeAdjustment(ssa->GetFunction()->GetArchitecture(), insn.address, {funcType, BN_DEFAULT_CONFIDENCE});
+    function->SetAutoCallTypeAdjustment(function->GetArchitecture(), insn.address, {funcType, BN_DEFAULT_CONFIDENCE});
     // --
 
-    if (!BinaryNinja::Settings::Instance()->Get<bool>("core.function.objectiveC.rewriteMessageSendTarget", bv))
+    if (!BinaryNinja::Settings::Instance()->Get<bool>("analysis.objectiveC.resolveDynamicDispatch", function))
         return false;
 
     // Check the analysis info for a selector reference corresponding to the

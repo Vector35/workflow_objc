@@ -16,40 +16,41 @@ BN_DECLARE_CORE_ABI_VERSION
 
 BINARYNINJAPLUGIN void CorePluginDependencies()
 {
-    BinaryNinja::AddOptionalPluginDependency("arch_x86");
-    BinaryNinja::AddOptionalPluginDependency("arch_armv7");
-    BinaryNinja::AddOptionalPluginDependency("arch_arm64");
+	BinaryNinja::AddOptionalPluginDependency("arch_x86");
+	BinaryNinja::AddOptionalPluginDependency("arch_armv7");
+	BinaryNinja::AddOptionalPluginDependency("arch_arm64");
 }
 
 BINARYNINJAPLUGIN bool CorePluginInit()
 {
-    RelativePointerDataRenderer::Register();
+	RelativePointerDataRenderer::Register();
 
-    Workflow::registerActivities();
+	Workflow::registerActivities();
 
-    std::vector<BinaryNinja::Ref<BinaryNinja::Architecture>> targets = {
-        BinaryNinja::Architecture::GetByName("aarch64"),
-        BinaryNinja::Architecture::GetByName("x86_64")
-    };
-    for (auto& target : targets) {
-        if (target)
-        {
-            auto* currentHook = new CFStringArchitectureHook(target);
-            target->Register(currentHook);
-        }
-    }
+	std::vector<BinaryNinja::Ref<BinaryNinja::Architecture>> targets = {
+		BinaryNinja::Architecture::GetByName("aarch64"),
+		BinaryNinja::Architecture::GetByName("x86_64")
+	};
+	for (auto& target : targets) {
+		if (target)
+		{
+			auto* currentHook = new CFStringArchitectureHook(target);
+			target->Register(currentHook);
+		}
+	}
 
-    BinaryNinja::LogRegistry::CreateLogger(PluginLoggerName);
+	BinaryNinja::LogRegistry::CreateLogger(PluginLoggerName);
 
-    auto settings = BinaryNinja::Settings::Instance();
-    settings->RegisterSetting("core.function.objectiveC.rewriteMessageSendTarget",
-        R"({
-		"title" : "Rewrite objc_msgSend calls in IL",
+	auto settings = BinaryNinja::Settings::Instance();
+	settings->RegisterSetting("analysis.objectiveC.resolveDynamicDispatch",
+		R"({
+		"title" : "Resolve Dynamic Dispatch Calls",
 		"type" : "boolean",
 		"default" : false,
-		"description" : "Message sends of selectors with any visible implementation are replaced with a direct call to the first visible implementation. Note that this can produce false positives if the selector is implemented by more than one class, or shares a name with a method from a system framework."
+		"aliases": ["core.function.objectiveC.assumeMessageSendTarget", "core.function.objectiveC.rewriteMessageSendTarget"],
+		"description" : "Replaces objc_msgSend calls with direct calls to the first found implementation when the target method is visible. May produce false positives when multiple classes implement the same selector or when selectors conflict with system framework methods."
 		})");
 
-    return true;
+	return true;
 }
 }
