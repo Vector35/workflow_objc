@@ -1,6 +1,6 @@
 # MIGRATED
 
-This repository was moved to thr main [binaryninja api](https://github.com/Vector35/binaryninja-api/tree/dev/plugins/workflow_objc) repository. 
+This repository was moved to the main [binaryninja api](https://github.com/Vector35/binaryninja-api/tree/dev/plugins/workflow_objc) repository. 
 
 # Objective-C Workflow
 
